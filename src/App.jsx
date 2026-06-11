@@ -7,8 +7,8 @@ import spiderLiveLogo from './assets/spiderlive-logo.png';
 
 const MODX = [40, 380, 720, 1060, 1400, 1740];
 
-// ---------- Persistencia de posiciones (localStorage) ----------
-const LS_POS = 'arana-rf-pos';
+// ---------- Node position persistence (localStorage) ----------
+const LS_POS = 'spiderlive-pos';
 const loadPos = () => { try { return JSON.parse(localStorage.getItem(LS_POS)) || {}; } catch { return {}; } };
 const savePos = (nodes) => {
   const m = {}; nodes.forEach(n => { m[n.id] = n.position; });
@@ -16,45 +16,45 @@ const savePos = (nodes) => {
 };
 
 const DOCS = {
-  module:   { n:'Cilindro doble efecto + electroválvula 5/2', d:'Actuador lineal ISO 1219 (camisa, émbolo, vástago, amortiguación) gobernado por una 5/2 monoestable (solenoide 14 + muelle 12). Reed a0/a1 sobre la camisa.', u:'https://www.festo.com/mx/es/c/productos/ingenieria-industrial/actuadores-neumaticos-id_pim_3/' },
-  plc:      { n:'PLC Siemens S7-1200 · CPU 1214C', d:'14 DI / 10 DO / 2 AI integradas; ejecuta el programa en escalera de 22 pasos.', u:'https://www.siemens.com/global/en/products/automation/systems/industrial/plc/s7-1200.html' },
-  button:   { n:'Pulsador de mando', d:'NA (marcha) o NC (paro) cableado a una entrada I del PLC.', u:'https://www.festo.com/mx/es/c/productos/ingenieria-industrial/tecnologia-de-control-y-de-software-id_pim_8/' },
-  mush:     { n:'Seta de paro de emergencia', d:'Hongo con enclavamiento (NC). Detiene la instalación; todas las patas bajan.', u:'https://www.festo.com/mx/es/search/?text=paro%20de%20emergencia' },
-  supply:   { n:'Alimentación neumática (compresor · depósito · FRL · manómetro)', d:'Genera, acumula, acondiciona y mide el aire (6 bar) que alimenta el manifold.', u:'https://www.festo.com/mx/es/c/productos/ingenieria-industrial/preparacion-de-aire-comprimido-id_pim_2/' },
-  supply24: { n:'Fuente de alimentación 24 VDC', d:'Alimenta el PLC y los sensores. +24 V (rojo) / 0 V (azul).', u:'https://mall.industry.siemens.com/mall/es/mx/Catalog/Products/10044947' },
-  torreta:  { n:'Torreta de señalización', d:'Columna luminosa accionada por las salidas Q0.6 (verde, marcha) y Q0.7 (rojo, emergencia).', u:'https://www.festo.com/mx/es/search/?text=columna%20de%20se%C3%B1alizaci%C3%B3n' },
+  module:   { n:'Double-acting cylinder + 5/2 solenoid valve', d:'ISO 1219 linear actuator (barrel, piston, rod, cushioning) driven by a single-solenoid 5/2 valve (solenoid 14 + spring return 12). a0/a1 reed switches on the barrel.', u:'https://www.festo.com/us/en/search/?text=pneumatic%20cylinders' },
+  plc:      { n:'Siemens S7-1200 PLC · CPU 1214C', d:'14 DI / 10 DO / 2 AI on board; runs the 22-step ladder program.', u:'https://www.siemens.com/global/en/products/automation/systems/industrial/plc/s7-1200.html' },
+  button:   { n:'Push button', d:'NO (start) or NC (stop), wired to a PLC I input.', u:'https://www.festo.com/us/en/search/?text=pushbutton' },
+  mush:     { n:'Emergency stop button', d:'Latching mushroom head (NC). Stops the installation; all legs come down.', u:'https://www.festo.com/us/en/search/?text=emergency%20stop' },
+  supply:   { n:'Pneumatic supply (compressor · tank · FRL · gauge)', d:'Generates, stores, conditions and measures the air (6 bar) feeding the manifold.', u:'https://www.festo.com/us/en/search/?text=air%20preparation' },
+  supply24: { n:'24 VDC power supply', d:'Powers the PLC and the sensors. +24 V (red) / 0 V (blue).', u:'https://mall.industry.siemens.com/mall/en/WW/Catalog/Products/10044947' },
+  tower:    { n:'Signal tower', d:'Light column driven by outputs Q0.6 (green, running) and Q0.7 (red, emergency).', u:'https://www.festo.com/us/en/search/?text=signal%20tower' },
 };
 
 function makeNodes(sim){
   const n = [];
   n.push({ id:'plc', type:'plc', position:{ x:380, y:60 }, data:{ sim:{} }, draggable:true });
   n.push({ id:'v24', type:'supply24', position:{ x:910, y:70 }, data:{} });
-  n.push({ id:'tor', type:'torreta', position:{ x:250, y:70 }, data:{ sim:{} } });
+  n.push({ id:'tor', type:'tower', position:{ x:250, y:70 }, data:{ sim:{} } });
   const btns = [
-    ['b_marcha','MARCHA','#2ec27e', () => E.marcha(sim.current),    s => s.sysOn && !s.emerg],
-    ['b_paro1', 'PARO 1','#d83a34', () => E.paro(sim.current),      () => false],
-    ['b_paro2', 'PARO 2','#444c56', () => E.paro(sim.current),      () => false],
-    ['b_auto',  'AUTO',  '#444c56', () => { sim.current.auto = !sim.current.auto; }, s => s.auto],
+    ['b_start','START', '#2ec27e', () => E.start(sim.current),     s => s.sysOn && !s.emerg],
+    ['b_stop1','STOP 1','#d83a34', () => E.stop(sim.current),      () => false],
+    ['b_stop2','STOP 2','#444c56', () => E.stop(sim.current),      () => false],
+    ['b_auto', 'AUTO',  '#444c56', () => { sim.current.auto = !sim.current.auto; }, s => s.auto],
   ];
   btns.forEach(([id,lab,col,onClick,lit],k) =>
     n.push({ id, type:'button', position:{ x:400+k*86, y:-30 }, data:{ lab, col, onClick, lit, on:false } }));
-  n.push({ id:'b_emerg', type:'mush', position:{ x:760, y:-34 }, data:{ onClick:() => E.setaEmerg(sim.current), on:false } });
+  n.push({ id:'b_emerg', type:'mush', position:{ x:760, y:-34 }, data:{ onClick:() => E.eStop(sim.current), on:false } });
   for (let i=0;i<6;i++)
     n.push({ id:'m'+i, type:'module', position:{ x:MODX[i], y:300 }, data:{ i, pos:0, on:false } });
   n.push({ id:'sup', type:'supply', position:{ x:430, y:540 }, data:{} });
-  const saved = loadPos();                                         // restaura el acomodo del usuario
+  const saved = loadPos();                                         // restore the user's saved layout
   n.forEach(nd => { if (saved[nd.id]) nd.position = saved[nd.id]; });
   return n;
 }
 
 function makeEdges(){
   const e = [];
-  const A1 = ['I0.4','I0.5','I0.6','I0.7','I1.0','I1.1'];          // entradas a1 (final)
-  const A0 = ['I1.2','I1.3','I1.4','I1.5','I8.0','I8.1'];          // entradas a0 (inicio; e0/f0 en SM 1221)
+  const A1 = ['I0.4','I0.5','I0.6','I0.7','I1.0','I1.1'];          // a1 inputs (extended)
+  const A0 = ['I1.2','I1.3','I1.4','I1.5','I8.0','I8.1'];          // a0 inputs (retracted; e0/f0 on the SM 1221)
   const ctrl = (id, src, tgt, label, lit, tier=0) => ({ id, source:src, sourceHandle:'out', target:'plc', targetHandle:tgt, label, data:{ kind:'ctrl', lit, tier } });
-  e.push(ctrl('e-marcha','b_marcha','i_marcha','I0.0', s=>s.sysOn&&!s.emerg, 0));
-  e.push(ctrl('e-paro1','b_paro1','i_paro1','I0.1', null, 1));
-  e.push(ctrl('e-paro2','b_paro2','i_paro2','I0.2', null, 0));
+  e.push(ctrl('e-start','b_start','i_start','I0.0', s=>s.sysOn&&!s.emerg, 0));
+  e.push(ctrl('e-stop1','b_stop1','i_stop1','I0.1', null, 1));
+  e.push(ctrl('e-stop2','b_stop2','i_stop2','I0.2', null, 0));
   e.push(ctrl('e-emerg','b_emerg','i_emerg','I0.3', s=>s.emerg, 1));
   for (let i=0;i<6;i++){
     e.push({ id:'e-q'+i, source:'plc', sourceHandle:'q'+i, target:'m'+i, targetHandle:'sol', label:'Q0.'+i, data:{ kind:'out', i, tier:i%2 } });
@@ -67,9 +67,9 @@ function makeEdges(){
   e.push({ id:'e-tor-com', source:'tor', sourceHandle:'com', target:'plc', targetHandle:'m', label:'0V', data:{ kind:'pwr', col:'#539bf5' } });
   e.push({ id:'e-lp', source:'v24', sourceHandle:'plus',  target:'plc', targetHandle:'lplus', label:'L+', data:{ kind:'pwr', col:'#e5534b' } });
   e.push({ id:'e-m',  source:'v24', sourceHandle:'minus', target:'plc', targetHandle:'m',     label:'M',  data:{ kind:'pwr', col:'#539bf5' } });
-  const ep = loadEdgePaths();                                     // restaura trazos arrastrados
+  const ep = loadEdgePaths();                                     // restore dragged wire paths
   e.forEach(x => {
-    x.type = 'tag';                                               // etiqueta anclada al borne del PLC
+    x.type = 'tag';                                               // label anchored to the PLC terminal
     if (x.data){
       x.data.tagAt = x.source === 'plc' ? 'source' : 'target';
       if (ep[x.id]) x.data.route = ep[x.id];
@@ -90,31 +90,31 @@ function Flow(){
   const initE = useMemo(() => makeEdges(), []);
   const [nodes, setNodes, onNodesChange] = useNodesState(initN);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initE);
-  const [hud, setHud] = useState({ paso:0, modo:'—', estado:'EN PARO' });
+  const [hud, setHud] = useState({ step:0, mode:'—', status:'STOPPED' });
   const [docKey, setDocKey] = useState(null);
   const [docsOpen, setDocsOpen] = useState(true);
-  const [sel, setSel] = useState(null);                          // recuadro de selección (coords de pantalla)
-  const [live, setLive] = useState(false);                       // false = Edición (congelado) · true = Simulación animada
-  const hotRef = useRef(null);                                   // id del cable resaltado (para el lazo rAF)
+  const [sel, setSel] = useState(null);                          // selection box (screen coords)
+  const [live, setLive] = useState(false);                       // false = Edit (frozen) · true = animated Simulation
+  const hotRef = useRef(null);                                   // id of the highlighted wire (for the rAF loop)
   const hovT = useRef(0);
 
-  // Vuelca el estado actual a nodos/cables. animate=true → flujo animado en cables. Solo recrea lo que cambió.
+  // Pushes the current state onto nodes/wires. animate=true → animated flow on wires. Only recreates what changed.
   const applyState = useCallback((animate) => {
     const s = sim.current;
     setNodes(nds => nds.map(n => {
       if (n.type === 'module'){
-        const i = n.data.i, pos = s.pos[i], on = E.solenoide(s,i);
+        const i = n.data.i, pos = s.pos[i], on = E.solenoid(s,i);
         return (n.data.pos === pos && n.data.on === on) ? n : { ...n, data:{ ...n.data, pos, on } };
       }
       if (n.type === 'plc'){
-        const q = [ ...[0,1,2,3,4,5].map(i=>E.solenoide(s,i)), s.sysOn&&!s.emerg, s.emerg ];
+        const q = [ ...[0,1,2,3,4,5].map(i=>E.solenoid(s,i)), s.sysOn&&!s.emerg, s.emerg ];
         const di = [ s.sysOn&&!s.emerg, false, false, s.emerg,
           ...[0,1,2,3,4,5].map(i=>E.upS(s.pos,i)), ...[0,1,2,3,4,5].map(i=>E.downS(s.pos,i)) ];
         const p = n.data.sim || {};
-        if (p.paso===s.paso && p.sysOn===s.sysOn && p.emerg===s.emerg && arrEq(p.q,q) && arrEq(p.di,di)) return n;
-        return { ...n, data:{ ...n.data, sim:{ paso:s.paso, sysOn:s.sysOn, emerg:s.emerg, q, di } } };
+        if (p.step===s.step && p.sysOn===s.sysOn && p.emerg===s.emerg && arrEq(p.q,q) && arrEq(p.di,di)) return n;
+        return { ...n, data:{ ...n.data, sim:{ step:s.step, sysOn:s.sysOn, emerg:s.emerg, q, di } } };
       }
-      if (n.type === 'torreta'){
+      if (n.type === 'tower'){
         const p = n.data.sim || {};
         return (p.sysOn===s.sysOn && p.emerg===s.emerg) ? n : { ...n, data:{ ...n.data, sim:{ sysOn:s.sysOn, emerg:s.emerg } } };
       }
@@ -127,7 +127,7 @@ function Flow(){
     }));
     setEdges(eds => eds.map(e => {
       const k = e.data?.kind; let on = false, col = '#39414d';
-      if (k === 'out')    { on = E.solenoide(s, e.data.i); col = on ? '#39d98a' : '#234a37'; }
+      if (k === 'out')    { on = E.solenoid(s, e.data.i); col = on ? '#39d98a' : '#234a37'; }
       else if (k==='sensor'){ on = E.upS(s.pos, e.data.i); col = on ? '#e3b341' : '#4a431f'; }
       else if (k==='sensor0'){ on = E.downS(s.pos, e.data.i); col = on ? '#d68b2a' : '#43361c'; }
       else if (k==='air')   { on = true; col = '#4aa3ff'; }
@@ -142,7 +142,7 @@ function Flow(){
     }));
   }, [setNodes, setEdges]);
 
-  // Cable globalmente más cercano al punto (robusto ante traslapes): muestrea las paths reales.
+  // Globally closest wire to the point (robust to overlaps): samples the real paths.
   const closestEdgeAt = (cx, cy) => {
     const g = rf.screenToFlowPosition({ x:cx, y:cy });
     let bestId = null, bd = Infinity, bestEl = null, bestL = 0;
@@ -168,8 +168,8 @@ function Flow(){
     const hit = closestEdgeAt(e.clientX, e.clientY), zoom = rf.getZoom ? rf.getZoom() : 1;
     if (hit.id && hit.dist <= 12 / zoom){ const api = edgeDragRegistry.get(hit.id); if (api) api.reset(); }
   };
-  const onCanvasPointerMove = (e) => {                           // resalta + cursor del cable más cercano
-    if (sel || e.buttons) return;                                // no durante selección / arrastre / pan
+  const onCanvasPointerMove = (e) => {                           // highlight + cursor for the closest wire
+    if (sel || e.buttons) return;                                // not during selection / drag / pan
     const now = performance.now(); if (now - hovT.current < 55) return; hovT.current = now;
     const pane = document.querySelector('.react-flow__pane');
     const onObj = e.target.closest && e.target.closest('.react-flow__node, .react-flow__handle, button, a');
@@ -179,17 +179,17 @@ function Flow(){
       if (hit.id && hit.dist <= 12 / zoom){ id = hit.id; cursor = hit.vert ? 'ew-resize' : 'ns-resize'; }
     }
     if (pane) pane.style.cursor = cursor;
-    if (hotRef.current !== id){ hotRef.current = id; if (!live) applyState(false); }   // en Live lo refresca el rAF
+    if (hotRef.current !== id){ hotRef.current = id; if (!live) applyState(false); }   // in Live the rAF loop refreshes it
   };
 
-  // ---- Selección estilo AutoCAD: izq→der encierra (ventana azul) · der→izq cruza (verde) ----
+  // ---- AutoCAD-style selection: left→right encloses (blue window) · right→left crosses (green) ----
   const finalize = (a, b) => {
-    if (Math.hypot(b.x - a.x, b.y - a.y) < 4){                    // clic simple → limpiar selección
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 4){                    // plain click → clear selection
       setNodes(nds => nds.map(n => n.selected ? { ...n, selected:false } : n));
       setEdges(eds => eds.map(e => e.selected ? { ...e, selected:false } : e));
       return;
     }
-    const crossing = b.x < a.x;                                   // arrastre hacia la izquierda = cruce
+    const crossing = b.x < a.x;                                   // dragging leftwards = crossing
     const p0 = rf.screenToFlowPosition({ x: Math.min(a.x,b.x), y: Math.min(a.y,b.y) });
     const p1 = rf.screenToFlowPosition({ x: Math.max(a.x,b.x), y: Math.max(a.y,b.y) });
     const R = { minX:p0.x, minY:p0.y, maxX:p1.x, maxY:p1.y };
@@ -220,16 +220,16 @@ function Flow(){
     setEdges(eds => eds.map(e => ({ ...e, selected: selE.has(e.id) })));
   };
   const onCanvasPointerDown = (e) => {
-    if (e.button !== 0) return;                                   // solo botón izquierdo
+    if (e.button !== 0) return;                                   // left button only
     const t = e.target;
     if (t.closest && t.closest('.react-flow__node, .react-flow__handle, .react-flow__controls, button, a')) return;
-    // 1) ¿hay un cable cerca? agarra el GLOBALMENTE más cercano (sin confundirse por traslapes)
+    // 1) is there a wire nearby? grab the GLOBALLY closest one (not fooled by overlaps)
     const hit = closestEdgeAt(e.clientX, e.clientY), zoom = rf.getZoom ? rf.getZoom() : 1;
     if (hit.id && hit.dist <= 12 / zoom){
       const api = edgeDragRegistry.get(hit.id);
       if (api && api.drag(e.clientX, e.clientY)) return;
     }
-    // 2) si no, y es lienzo vacío → selección
+    // 2) otherwise, on empty canvas → selection box
     if (!(t.classList && t.classList.contains('react-flow__pane'))) return;
     const a = { x: e.clientX, y: e.clientY };
     setSel({ x0:a.x, y0:a.y, x1:a.x, y1:a.y });
@@ -244,24 +244,24 @@ function Flow(){
     window.addEventListener('pointerup', up);
   };
 
-  const hudOf = (s) => ({ paso:s.paso, modo:E.modo(s.paso), estado: s.emerg?'EMERGENCIA' : s.sysOn?'EN MARCHA':'EN PARO' });
+  const hudOf = (s) => ({ step:s.step, mode:E.mode(s.step), status: s.emerg?'EMERGENCY' : s.sysOn?'RUNNING':'STOPPED' });
 
-  useEffect(() => {                                              // SIMULACIÓN: lazo de animación continuo
+  useEffect(() => {                                              // SIMULATION: continuous animation loop
     if (!live) return;
     let raf, prev = performance.now();
     const loop = (now) => {
       let dt = now - prev; prev = now; if (dt > 100) dt = 100;
-      const s = sim.current; E.step(s, dt);
+      const s = sim.current; E.tick(s, dt);
       applyState(true);
       const h = hudOf(s);
-      setHud(p => (p.paso===h.paso && p.modo===h.modo && p.estado===h.estado) ? p : h);
+      setHud(p => (p.step===h.step && p.mode===h.mode && p.status===h.status) ? p : h);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [live, applyState]);
 
-  useEffect(() => {                                              // EDICIÓN: un frame estático (sin animación) y a descansar
+  useEffect(() => {                                              // EDIT: one static frame (no animation), then rest
     if (live) return;
     applyState(false);
     setHud(hudOf(sim.current));
@@ -280,7 +280,7 @@ function Flow(){
         <Controls position="bottom-right" />
       </ReactFlow>
       {sel && (() => {
-        const cr = sel.x1 < sel.x0;                               // cruce (verde) vs ventana (azul)
+        const cr = sel.x1 < sel.x0;                               // crossing (green) vs window (blue)
         const L = Math.min(sel.x0,sel.x1), T = Math.min(sel.y0,sel.y1);
         const W = Math.abs(sel.x1-sel.x0), H = Math.abs(sel.y1-sel.y0);
         return <div style={{ position:'absolute', left:L, top:T, width:W, height:H, zIndex:6, pointerEvents:'none',
@@ -295,35 +295,35 @@ function Flow(){
         </div>
         <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap', font:'600 11px system-ui' }}>
           <span style={chip}>
-            <span style={{ color: hud.estado==='EMERGENCIA'?'#e5534b':hud.estado==='EN MARCHA'?'#2ec27e':'#8b949e' }}>●</span>{' '}
-            <b style={{ color: hud.estado==='EMERGENCIA'?'#e5534b':hud.estado==='EN MARCHA'?'#2ec27e':'#e6edf3' }}>{hud.estado}</b>
+            <span style={{ color: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#8b949e' }}>●</span>{' '}
+            <b style={{ color: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#e6edf3' }}>{hud.status}</b>
           </span>
-          <span style={chip}>Paso <b style={{ color:'#e6edf3' }}>{hud.paso}</b>/22</span>
-          <span style={chip}><b style={{ color:'#e6edf3' }}>{hud.modo}</b></span>
+          <span style={chip}>Step <b style={{ color:'#e6edf3' }}>{hud.step}</b>/22</span>
+          <span style={chip}><b style={{ color:'#e6edf3' }}>{hud.mode}</b></span>
           <span style={{ ...chip, color: live?'#e3b341':'#8b949e', borderColor: live?'#5a4a1e':'#2a313c' }}>
-            {live ? '◉ Simulación' : '✎ Edición'}
+            {live ? '◉ Simulation' : '✎ Edit'}
           </span>
         </div>
       </div>
       <div style={{ position:'absolute', bottom:16, left:16, display:'flex', gap:8, zIndex:10 }}>
         <button style={btnCss(live?'#e3b341':'#3a414c', live?'#0b0e13':'#e6edf3')} onClick={() => setLive(v => !v)}
-                title="Edición = congelado y ligero · Simulación = animación en vivo (sensores y flujo en los cables)">
-          {live ? '◉ Simulación' : '✎ Edición'}</button>
-        <button style={btnCss('#2ec27e')} onClick={() => { setLive(true); E.marcha(sim.current); }}>▶ MARCHA</button>
-        <button style={btnCss('#cdd9e5')} onClick={() => E.paro(sim.current)}>PARO</button>
-        <button style={btnCss('#e5534b','#fff')} onClick={() => E.setaEmerg(sim.current)}>SETA</button>
+                title="Edit = frozen and lightweight · Simulation = live animation (sensors and flow on the wires)">
+          {live ? '◉ Simulation' : '✎ Edit'}</button>
+        <button style={btnCss('#2ec27e')} onClick={() => { setLive(true); E.start(sim.current); }}>▶ START</button>
+        <button style={btnCss('#cdd9e5')} onClick={() => E.stop(sim.current)}>STOP</button>
+        <button style={btnCss('#e5534b','#fff')} onClick={() => E.eStop(sim.current)}>E-STOP</button>
         <button style={btnCss('#3a414c','#e6edf3')} onClick={() => E.reset(sim.current)}>↺ Reset</button>
-        <button style={btnCss('#3a414c','#e6edf3')} onClick={() => { localStorage.removeItem(LS_POS); clearEdgePaths(); setNodes(makeNodes(sim)); setEdges(makeEdges()); }}>⤢ Acomodo</button>
+        <button style={btnCss('#3a414c','#e6edf3')} onClick={() => { localStorage.removeItem(LS_POS); clearEdgePaths(); setNodes(makeNodes(sim)); setEdges(makeEdges()); }}>⤢ Arrange</button>
       </div>
       <div style={{ position:'absolute', top:58, right:12, width:236, zIndex:10, display:'flex', flexDirection:'column', gap:6 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
                       color:'#8b949e', font:'12px system-ui',
                       background:'#161b22cc', border:'1px solid #2a313c', borderRadius:9, padding:'6px 9px' }}>
-          <span>Documentación{docsOpen ? ' — pasa el cursor por un componente' : ''}</span>
+          <span>Documentation{docsOpen ? ' — hover over a component' : ''}</span>
           <button onClick={() => setDocsOpen(o => !o)}
                   style={{ background:'#21262d', color:'#e6edf3', border:'1px solid #2a313c', borderRadius:7,
                            cursor:'pointer', font:'12px system-ui', padding:'2px 8px', flexShrink:0 }}>
-            {docsOpen ? '▾ Ocultar' : '▸ Mostrar'}
+            {docsOpen ? '▾ Hide' : '▸ Show'}
           </button>
         </div>
         {docsOpen && Object.entries(DOCS).map(([k, v]) => (
@@ -333,7 +333,7 @@ function Flow(){
                       boxShadow: docKey===k ? '0 0 0 1px #ffd24a66' : 'none', padding:'7px 9px', transition:'border-color .12s' }}>
             <div style={{ fontSize:12, fontWeight:600 }}>{v.n}</div>
             <div style={{ fontSize:10.5, color:'#8b949e', margin:'2px 0 3px', lineHeight:1.25 }}>{v.d}</div>
-            <div style={{ fontSize:10, color:'#539bf5' }}>Ver documentación ↗</div>
+            <div style={{ fontSize:10, color:'#539bf5' }}>View docs ↗</div>
           </a>
         ))}
       </div>

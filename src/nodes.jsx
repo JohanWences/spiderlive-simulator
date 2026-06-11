@@ -2,14 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Handle, Position, BaseEdge, EdgeLabelRenderer, useReactFlow } from '@xyflow/react';
 import { LEG } from './engine.js';
 
-// Registro de cables: cada arista publica { drag, reset } y el lienzo decide cuál agarrar (hit-test global, robusto ante traslapes).
+// Wire registry: each edge publishes { drag, reset } and the canvas decides which one to grab (global hit-test, robust to overlaps).
 export const edgeDragRegistry = new Map();
 
 const GRN = '#2ec27e', AMB = '#e3b341', AIR = '#4aa3ff', MUT = '#8b949e', METAL = '#cdd9e5';
 const hStyle = (c) => ({ background: c, width: 8, height: 8, border: '1px solid #0b0e13' });
 
-// ---------- Persistencia del trazo de cables (localStorage) ----------
-const LS_EDGES = 'arana-rf-edges';
+// ---------- Wire path persistence (localStorage) ----------
+const LS_EDGES = 'spiderlive-edges';
 export const saveEdgePaths = (edges) => {
   const m = {};
   edges.forEach(e => { if (e.data && e.data.route && e.data.route.length) m[e.id] = e.data.route; });
@@ -18,14 +18,14 @@ export const saveEdgePaths = (edges) => {
 export const loadEdgePaths  = () => { try { return JSON.parse(localStorage.getItem(LS_EDGES)) || {}; } catch { return {}; } };
 export const clearEdgePaths = () => { try { localStorage.removeItem(LS_EDGES); } catch {} };
 
-// Punto de "colilla": sale del borne en la dirección del handle.
+// "Stub" point: leaves the terminal in the handle's direction.
 function stubPt(x, y, p, D=18){
   if (p === Position.Top)    return { x, y: y - D };
   if (p === Position.Bottom) return { x, y: y + D };
   if (p === Position.Left)   return { x: x - D, y };
   return { x: x + D, y };
 }
-// Ruteo ortogonal automático → lista de esquinas interiores [A … B] (sin source/target).
+// Automatic orthogonal routing → list of inner corners [A … B] (without source/target).
 function buildRoute(sx, sy, sp, tx, ty, tp){
   const A = stubPt(sx, sy, sp), B = stubPt(tx, ty, tp);
   const sv = sp === Position.Top || sp === Position.Bottom;
@@ -37,7 +37,7 @@ function buildRoute(sx, sy, sp, tx, ty, tp){
   else { const mx = (A.x + B.x) / 2; pts = [A, { x:mx, y:A.y }, { x:mx, y:B.y }, B]; }
   return pts.filter((p, i) => i === 0 || p.x !== pts[i-1].x || p.y !== pts[i-1].y);
 }
-// Path con esquinas redondeadas a partir de [[x,y]…]
+// Path with rounded corners from [[x,y]…]
 function roundPath(pts, r=7){
   if (pts.length < 2) return '';
   let d = `M ${pts[0][0]},${pts[0][1]}`;
@@ -51,14 +51,14 @@ function roundPath(pts, r=7){
   const last = pts[pts.length-1];
   return d + ` L ${last[0]},${last[1]}`;
 }
-// Distancia de un punto a un segmento.
+// Distance from a point to a segment.
 function segDist(a, b, p){
   const vx=b.x-a.x, vy=b.y-a.y, wx=p.x-a.x, wy=p.y-a.y;
   const len2 = vx*vx + vy*vy || 1;
   let t = (wx*vx + wy*vy) / len2; t = Math.max(0, Math.min(1, t));
   return Math.hypot(p.x - (a.x + t*vx), p.y - (a.y + t*vy));
 }
-// Asegura que las colillas a los bornes queden ortogonales (limpia diagonales heredadas).
+// Ensures the stubs to the terminals stay orthogonal (cleans up inherited diagonals).
 function fixStubs(S, route, T, sp, tp){
   if (!route.length) return route;
   const sV = sp === Position.Top || sp === Position.Bottom;
@@ -71,7 +71,7 @@ function fixStubs(S, route, T, sp, tp){
     r.push(tV ? { x:T.x, y:r[L].y } : { x:r[L].x, y:T.y });
   return r;
 }
-// Al arrastrar un tramo pegado a un borne, inserta un codo para que la colilla NO se incline.
+// When dragging a segment attached to a terminal, insert an elbow so the stub does NOT tilt.
 function insertForDrag(route, k, vert, S, T, sp, tp){
   const w = route.map(p => ({ ...p }));
   let a = k - 1, b = k;
@@ -86,20 +86,20 @@ function insertForDrag(route, k, vert, S, T, sp, tp){
   return { work:w, iStart:a, iEnd:b };
 }
 
-// ---------- Arista: etiqueta anclada al BORNE + punto de quiebre arrastrable ----------
-// Hover sobre el cable → aparece un tirador; arrástralo para mover el cable; doble clic = automático.
+// ---------- Edge: label anchored to the TERMINAL + draggable break point ----------
+// Hover over the wire → a grip appears; drag it to move the wire; double-click = back to automatic.
 export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data, label, markerEnd }){
   const { screenToFlowPosition, setEdges } = useReactFlow();
   const S = { x:sourceX, y:sourceY }, T = { x:targetX, y:targetY };
 
-  // polilínea completa: source → (esquinas, colillas saneadas) → target
+  // full polyline: source → (corners, sanitized stubs) → target
   const raw = (data && data.route && data.route.length)
     ? data.route
     : buildRoute(sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition);
   const route = fixStubs(S, raw, T, sourcePosition, targetPosition);
   const full = [S, ...route, T];
   const path = roundPath(full.map(p => [p.x, p.y]));
-  const loI = 1, hiI = full.length - 3;                       // tramos editables (sin las colillas a borne)
+  const loI = 1, hiI = full.length - 3;                       // editable segments (excluding the terminal stubs)
 
   const nearestSeg = (g) => {
     let best = -1, bd = Infinity;
@@ -108,7 +108,7 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
   };
   const segVert = (k) => Math.abs(full[k].x - full[k+1].x) <= Math.abs(full[k].y - full[k+1].y);
 
-  const beginDrag = (cx, cy) => {                             // lo dispara el hit-test global del lienzo
+  const beginDrag = (cx, cy) => {                             // triggered by the canvas's global hit-test
     if (hiI < loI) return false;
     const k = nearestSeg(screenToFlowPosition({ x:cx, y:cy }));
     if (k < 0) return false;
@@ -133,7 +133,7 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
   };
   const reset = () => setEdges(eds => { const r = eds.map(ed => ed.id === id ? { ...ed, data:{ ...ed.data, route:null } } : ed); saveEdgePaths(r); return r; });
 
-  // publica la API de este cable para el hit-test global (siempre la versión fresca)
+  // publish this wire's API for the global hit-test (always the fresh version)
   const apiRef = useRef(null);
   apiRef.current = { drag:beginDrag, reset };
   useEffect(() => {
@@ -141,7 +141,7 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
     return () => { edgeDragRegistry.delete(id); };
   }, [id]);
 
-  // etiqueta de dirección, pegada al borne
+  // address label, attached to the terminal
   const at  = data?.tagAt === 'source' ? 'source' : 'target';
   const lx0 = at === 'source' ? sourceX : targetX;
   const ly0 = at === 'source' ? sourceY : targetY;
@@ -176,28 +176,28 @@ export const edgeTypes = { tag: TagEdge };
 // ---------- PLC ----------
 export function PLCNode({ data }){
   const W = 520, H = 178;
-  const sim = data.sim || { paso:0, sysOn:false, emerg:false, q:[], di:[] };
-  // ENTRADAS DI (regleta superior): handle, dirección, color
+  const sim = data.sim || { step:0, sysOn:false, emerg:false, q:[], di:[] };
+  // DI INPUTS (top terminal strip): handle, address, color
   const di = [
-    ['i_marcha','I0.0','#aab0b8'],['i_paro1','I0.1','#aab0b8'],['i_paro2','I0.2','#aab0b8'],['i_emerg','I0.3','#aab0b8'],
+    ['i_start','I0.0','#aab0b8'],['i_stop1','I0.1','#aab0b8'],['i_stop2','I0.2','#aab0b8'],['i_emerg','I0.3','#aab0b8'],
     ['in0','I0.4',AMB],['in1','I0.5',AMB],['in2','I0.6',AMB],['in3','I0.7',AMB],['in4','I1.0',AMB],['in5','I1.1',AMB],
     ['in_a0_0','I1.2','#d68b2a'],['in_a0_1','I1.3','#d68b2a'],['in_a0_2','I1.4','#d68b2a'],['in_a0_3','I1.5','#d68b2a'],
     ['in_a0_4','I8.0','#d68b2a'],['in_a0_5','I8.1','#d68b2a'],
   ];
   const dx = k => 54 + k*28.5;
-  // SALIDAS DQ a relé (regleta inferior) con comunes 1L/2L
+  // DQ relay OUTPUTS (bottom terminal strip) with 1L/2L commons
   const bot = [{lab:'1L'},{id:'q0',lab:'.0'},{id:'q1',lab:'.1'},{id:'q2',lab:'.2'},{id:'q3',lab:'.3'},
                {lab:'2L'},{id:'q4',lab:'.4'},{id:'q5',lab:'.5'},{id:'q6',lab:'.6'},{id:'q7',lab:'.7'}];
   const bx = k => 74 + k*34;
   return (
-    <div title="PLC Siemens S7-1200 · CPU 1214C AC/DC/RLY (14 DI / 10 DQ relé)" style={{ width:W, height:H, position:'relative' }}>
+    <div title="Siemens S7-1200 PLC · CPU 1214C AC/DC/RLY (14 DI / 10 relay DQ)" style={{ width:W, height:H, position:'relative' }}>
       {di.map(([id,addr,c],k) => <Handle key={id} type="target" position={Position.Top} id={id} title={`${addr} · ${id}`} style={{ ...hStyle(sim.di&&sim.di[k] ? c : '#39414d'), left: dx(k), top: 13 }} />)}
-      {bot.map((t,k) => t.id ? <Handle key={t.id} type="source" position={Position.Bottom} id={t.id} title={`Q0${t.lab} (relé)`} style={{ ...hStyle(sim.q&&sim.q[+t.id.slice(1)] ? GRN : '#2a4035'), left: bx(k), top: H-13 }} /> : null)}
+      {bot.map((t,k) => t.id ? <Handle key={t.id} type="source" position={Position.Bottom} id={t.id} title={`Q0${t.lab} (relay)`} style={{ ...hStyle(sim.q&&sim.q[+t.id.slice(1)] ? GRN : '#2a4035'), left: bx(k), top: H-13 }} /> : null)}
       <Handle type="target" position={Position.Right} id="lplus" title="L+ 24 VDC" style={{ ...hStyle('#e5534b'), top: 50 }} />
       <Handle type="target" position={Position.Right} id="m"     title="M 0 V"     style={{ ...hStyle(AIR), top: 80 }} />
       <svg width={W} height={H}>
         <rect x="0" y="0" width={W} height={H} rx="8" fill="#3a3f47" stroke="#15181d" strokeWidth="2" />
-        {/* regleta superior (bornes DI) */}
+        {/* top terminal strip (DI terminals) */}
         <rect x="6" y="3" width={W-12} height="22" rx="4" fill="#2b3038" stroke="#1c2026" />
         <text x="12" y="16" fill="#7a828c" fontSize="7" fontWeight="bold">DIa</text>
         {di.map(([id,addr,c],k) => <g key={'t'+k}>
@@ -207,13 +207,13 @@ export function PLCNode({ data }){
         </g>)}
         <rect x={dx(14)-9} y="1" width={dx(15)-dx(14)+18} height="35" rx="3" fill="none" stroke="#4a5a6a" strokeDasharray="2 2" />
         <text x={(dx(14)+dx(15))/2} y="45" fill="#6e7681" fontSize="6.5" textAnchor="middle">SM 1221</text>
-        {/* LEDs estado DI (verdes) */}
+        {/* DI status LEDs (green) */}
         {di.map(([id,addr,c],k) => <circle key={'dl'+k} cx={dx(k)} cy="48" r="3" fill={sim.di&&sim.di[k]?'#39d98a':'#243027'} />)}
         {/* RUN / STOP / ERROR */}
         <circle cx="24" cy="68" r="4" fill={sim.sysOn&&!sim.emerg?GRN:'#262b33'} /><text x="33" y="71" fill="#9aa0a8" fontSize="8">RUN</text>
         <circle cx="24" cy="84" r="4" fill={!sim.sysOn?AMB:'#262b33'} /><text x="33" y="87" fill="#9aa0a8" fontSize="8">STOP</text>
         <circle cx="24" cy="100" r="4" fill={sim.emerg?'#e5534b':'#262b33'} /><text x="33" y="103" fill="#9aa0a8" fontSize="8">ERROR</text>
-        {/* marca y modelo */}
+        {/* brand and model */}
         <text x="116" y="82" fill="#eef1f5" fontFamily="Arial" fontWeight="bold" fontSize="20">SIEMENS</text>
         <text x="116" y="100" fill="#aab0b8" fontSize="10">SIMATIC S7-1200</text>
         <text x={W-14} y="70" fill="#aab0b8" fontSize="11" textAnchor="end">CPU 1214C</text>
@@ -221,9 +221,9 @@ export function PLCNode({ data }){
         {/* PROFINET */}
         <rect x="116" y={H-64} width="30" height="22" rx="3" fill="#2ec27e" />
         <text x="131" y={H-67} fill="#7a828c" fontSize="6.5" textAnchor="middle">PROFINET</text>
-        {/* LEDs estado DQ (rojos = relé) */}
+        {/* DQ status LEDs (red = relay) */}
         {bot.map((t,k) => t.id ? <circle key={'ql'+k} cx={bx(k)} cy={H-46} r="3" fill={sim.q&&sim.q[+t.id.slice(1)]?'#e5534b':'#302424'} /> : null)}
-        {/* regleta inferior (RELAY OUTPUTS) */}
+        {/* bottom terminal strip (RELAY OUTPUTS) */}
         <rect x="6" y={H-25} width={W-12} height="22" rx="4" fill="#2b3038" stroke="#1c2026" />
         <text x="12" y={H-11} fill="#7a828c" fontSize="7" fontWeight="bold">DQa</text>
         {bot.map((t,k) => <g key={'b'+k}>
@@ -237,7 +237,7 @@ export function PLCNode({ data }){
   );
 }
 
-// ---------- Pulsador ----------
+// ---------- Push button ----------
 export function ButtonNode({ data }){
   return (
     <div onClick={data.onClick} style={{ width:56, height:70, position:'relative', cursor:'pointer' }}>
@@ -252,7 +252,7 @@ export function ButtonNode({ data }){
   );
 }
 
-// ---------- Seta de emergencia ----------
+// ---------- Emergency-stop mushroom button ----------
 export function MushNode({ data }){
   return (
     <div onClick={data.onClick} style={{ width:60, height:74, position:'relative', cursor:'pointer' }}>
@@ -267,7 +267,7 @@ export function MushNode({ data }){
   );
 }
 
-// ---------- Módulo: cilindro doble efecto (ISO 1219) + válvula 5/2 + sensores ----------
+// ---------- Module: double-acting cylinder (ISO 1219) + 5/2 valve + sensors ----------
 export function ModuleNode({ data }){
   const { i, pos = 0, on = false } = data;
   const W = 252, H = 150;
@@ -279,31 +279,31 @@ export function ModuleNode({ data }){
   const dn = pos <= 0.001, upp = pos >= 0.999;
   const tri = (cx2) => `M${cx2-5} ${vy+B+8} L${cx2+5} ${vy+B+8} L${cx2} ${vy+B+16} Z`;
   return (
-    <div title={'Cilindro doble efecto '+(i+1)+'A  +  electroválvula 5/2 '+(i+1)+'V1'} style={{ width:W, height:H, position:'relative' }}>
-      <Handle type="target" position={Position.Left}   id="sol" title="Pilotaje 14 — solenoide Y" style={{ ...hStyle(GRN), top: vy+B/2 }} />
-      <Handle type="source" position={Position.Top}    id="a0"  title="Fin de carrera a0 — INICIO (vástago retraído)" style={{ ...hStyle('#d68b2a'), left: xa0 }} />
-      <Handle type="source" position={Position.Top}    id="a1"  title="Fin de carrera a1 — FINAL (vástago extendido)" style={{ ...hStyle(AMB), left: xa1 }} />
-      <Handle type="target" position={Position.Bottom} id="air" title="Puerto 1 (P) — presión de alimentación" style={{ ...hStyle(AIR), left: vx+B }} />
+    <div title={'Double-acting cylinder '+(i+1)+'A  +  5/2 solenoid valve '+(i+1)+'V1'} style={{ width:W, height:H, position:'relative' }}>
+      <Handle type="target" position={Position.Left}   id="sol" title="Pilot 14 — solenoid Y" style={{ ...hStyle(GRN), top: vy+B/2 }} />
+      <Handle type="source" position={Position.Top}    id="a0"  title="Limit switch a0 — HOME (rod retracted)" style={{ ...hStyle('#d68b2a'), left: xa0 }} />
+      <Handle type="source" position={Position.Top}    id="a1"  title="Limit switch a1 — END (rod extended)" style={{ ...hStyle(AMB), left: xa1 }} />
+      <Handle type="target" position={Position.Bottom} id="air" title="Port 1 (P) — supply pressure" style={{ ...hStyle(AIR), left: vx+B }} />
       <svg width={W} height={H}>
-        {/* eje de simetría + guía de recorrido del vástago */}
+        {/* symmetry axis + rod travel guide */}
         <line x1={bx-6} y1={midY} x2={bx+bw} y2={midY} stroke="#3a414c" strokeWidth="0.8" strokeDasharray="6 2 1.5 2" />
         <line x1={x_r} y1={midY} x2={xa1+8} y2={midY} stroke="#2a3340" strokeWidth="0.8" strokeDasharray="3 3" />
-        {/* camisa + culatas */}
+        {/* barrel + end caps */}
         <rect x={bx} y={by} width={bw} height={bh} fill="#171d26" stroke="#5a6470" strokeWidth="1.8" />
         <rect x={bx} y={by} width="4" height={bh} fill="#2a3340" />
         <rect x={bx+bw-4} y={by} width="4" height={bh} fill="#2a3340" />
-        {/* amortiguación regulable */}
+        {/* adjustable cushioning */}
         <rect x={bx+7} y={midY-5} width="6" height="10" fill="none" stroke="#6e7681" strokeWidth="0.9" />
         <line x1={bx+5} y1={midY+6} x2={bx+15} y2={midY-6} stroke="#6e7681" strokeWidth="0.9" />
         <rect x={bx+bw-13} y={midY-5} width="6" height="10" fill="none" stroke="#6e7681" strokeWidth="0.9" />
         <line x1={bx+bw-15} y1={midY+6} x2={bx+bw-5} y2={midY-6} stroke="#6e7681" strokeWidth="0.9" />
-        {/* émbolo + vástago largo + pata (leva que pisa los finales de carrera) */}
+        {/* piston + long rod + leg (cam that trips the limit switches) */}
         <rect x={px} y={by+3} width="7" height={bh-6} fill={on?GRN:'#9aa3ad'} />
         <line x1={px+7} y1={midY} x2={pataX} y2={midY} stroke={on?GRN:'#aab1ba'} strokeWidth="4" />
         <rect x={pataX} y={midY-9} width={pataW} height="18" fill={on?GRN:METAL} />
         <text x={pataX+pataW/2} y={midY+4} fill="#0b0e13" fontSize="10" fontWeight="bold" textAnchor="middle">{LEG[i]}</text>
         <text x={bx} y={by-7} fill={MUT} fontSize="11" fontWeight="bold">{(i+1)+'A'}</text>
-        {/* fin de carrera a0 — INICIO del recorrido (vástago retraído); rodillo hacia abajo */}
+        {/* limit switch a0 — HOME end of travel (rod retracted); roller facing down */}
         <g stroke="#5a6470" strokeWidth="1.1" fill="none">
           <rect x={xa0-5} y={midY-26} width="10" height="11" fill="#0e1116" />
           <line x1={xa0} y1={midY-15} x2={xa0-6} y2={midY-10} />
@@ -312,7 +312,7 @@ export function ModuleNode({ data }){
         <circle cx={xa0} cy={midY-20.5} r="2" fill={dn?'#d68b2a':'#444c56'} />
         <line x1={xa0} y1={midY-26} x2={xa0} y2="0" stroke="#5a6470" strokeWidth="1" />
         <text x={xa0+9} y={midY-18} fill={MUT} fontSize="7">a0</text>
-        {/* fin de carrera a1 — FINAL del recorrido (vástago extendido); rodillo hacia abajo */}
+        {/* limit switch a1 — FAR end of travel (rod extended); roller facing down */}
         <g stroke="#5a6470" strokeWidth="1.1" fill="none">
           <rect x={xa1-5} y={midY-26} width="10" height="11" fill="#0e1116" />
           <line x1={xa1} y1={midY-15} x2={xa1-6} y2={midY-10} />
@@ -321,13 +321,13 @@ export function ModuleNode({ data }){
         <circle cx={xa1} cy={midY-20.5} r="2" fill={upp?GRN:'#444c56'} />
         <line x1={xa1} y1={midY-26} x2={xa1} y2="0" stroke="#5a6470" strokeWidth="1" />
         <text x={xa1+9} y={midY-18} fill={MUT} fontSize="7">a1</text>
-        {/* letras de cámara A/B */}
+        {/* chamber letters A/B */}
         <text x={bx+14} y={by+bh+9} fill={MUT} fontSize="7" textAnchor="middle">A</text>
         <text x={bx+bw-14} y={by+bh+9} fill={MUT} fontSize="7" textAnchor="middle">B</text>
-        {/* conexiones válvula -> cilindro (4->A extiende, 2->B retrae) */}
+        {/* valve -> cylinder connections (4->A extends, 2->B retracts) */}
         <polyline points={`${vx+8},${vy} ${vx+8},${by+bh+11} ${bx+14},${by+bh+11} ${bx+14},${by+bh}`} fill="none" stroke={on?AIR:'#39414d'} strokeWidth="2" />
         <polyline points={`${vx+2*B-8},${vy} ${vx+2*B-8},${by+bh+19} ${bx+bw-14},${by+bh+19} ${bx+bw-14},${by+bh}`} fill="none" stroke={!on?AIR:'#39414d'} strokeWidth="2" />
-        {/* válvula 5/2 */}
+        {/* 5/2 valve */}
         <rect x={vx} y={vy} width={B} height={B} fill={on?'rgba(74,163,255,.18)':'#11161d'} stroke="#5a6470" strokeWidth="1.5" />
         <rect x={vx+B} y={vy} width={B} height={B} fill={!on?'rgba(74,163,255,.18)':'#11161d'} stroke="#5a6470" strokeWidth="1.5" />
         <defs>
@@ -335,31 +335,31 @@ export function ModuleNode({ data }){
           <marker id={'ahG'+i} markerWidth="6" markerHeight="6" refX="4.6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5a6470" /></marker>
         </defs>
         <g strokeWidth="1.2" fill="none">
-          {/* caja izquierda (pilotada 14): activa cuando ON */}
+          {/* left box (pilot 14): active when ON */}
           <g stroke={on?AIR:'#5a6470'} markerEnd={`url(#${on?'ahB':'ahG'}${i})`}>
             <line x1={vx+B/2} y1={vy+B-5} x2={vx+6} y2={vy+6} />
             <line x1={vx+B-6} y1={vy+6} x2={vx+B-6} y2={vy+B-5} />
           </g>
-          {/* caja derecha (reposo, muelle 12): activa cuando OFF */}
+          {/* right box (rest, spring 12): active when OFF */}
           <g stroke={!on?AIR:'#5a6470'} markerEnd={`url(#${!on?'ahB':'ahG'}${i})`}>
             <line x1={vx+B+B/2} y1={vy+B-5} x2={vx+2*B-6} y2={vy+6} />
             <line x1={vx+B+6} y1={vy+6} x2={vx+B+6} y2={vy+B-5} />
           </g>
         </g>
-        {/* solenoide 14 + muelle 12 */}
+        {/* solenoid 14 + spring 12 */}
         <rect x={vx-15} y={vy} width="15" height={B} fill="none" stroke="#5a6470" strokeWidth="1.5" />
         <line x1={vx-12} y1={vy+3} x2={vx-3} y2={vy+B-3} stroke={on?GRN:'#6e7681'} strokeWidth="1.5" />
         <text x={vx-18} y={vy+10} fill={on?GRN:MUT} fontSize="9" textAnchor="end">{'Y_'+LEG[i]}</text>
         <text x={vx-8} y={vy-3} fill={MUT} fontSize="7" textAnchor="middle">14</text>
         <path d={`M${vx+2*B} ${vy+6} L${vx+2*B+2} ${vy+B-6} M${vx+2*B+4} ${vy+6} L${vx+2*B+6} ${vy+B-6} M${vx+2*B+8} ${vy+6} L${vx+2*B+10} ${vy+B-6}`} stroke="#6e7681" strokeWidth="1.2" fill="none" />
         <text x={vx+2*B+5} y={vy-3} fill={MUT} fontSize="7" textAnchor="middle">12</text>
-        {/* numeración de puertos */}
+        {/* port numbering */}
         <text x={vx+8} y={vy-3} fill={MUT} fontSize="8" textAnchor="middle">4</text>
         <text x={vx+2*B-8} y={vy-3} fill={MUT} fontSize="8" textAnchor="middle">2</text>
         <text x={vx+8} y={vy+B+10} fill={MUT} fontSize="8" textAnchor="middle">5</text>
         <text x={vx+B} y={vy+B+10} fill={MUT} fontSize="8" textAnchor="middle">1</text>
         <text x={vx+2*B-8} y={vy+B+10} fill={MUT} fontSize="8" textAnchor="middle">3</text>
-        {/* escapes 3,5 con silenciador */}
+        {/* exhausts 3,5 with silencer */}
         <line x1={vx+8} y1={vy+B} x2={vx+8} y2={vy+B+8} stroke="#39414d" strokeWidth="2" />
         <path d={tri(vx+8)} fill="none" stroke="#6e7681" />
         <line x1={vx+2*B-8} y1={vy+B} x2={vx+2*B-8} y2={vy+B+8} stroke="#39414d" strokeWidth="2" />
@@ -369,7 +369,7 @@ export function ModuleNode({ data }){
   );
 }
 
-// ---------- Alimentación neumática: compresor → depósito → FRL → manómetro ----------
+// ---------- Pneumatic supply: compressor → tank → FRL → gauge ----------
 export function SupplyNode(){
   return (
     <div style={{ width:300, height:64, position:'relative' }}>
@@ -377,10 +377,10 @@ export function SupplyNode(){
       <svg width="300" height="64">
         <circle cx="22" cy="30" r="15" fill="none" stroke="#9aa0a8" strokeWidth="1.6" />
         <path d="M16 23 L16 37 L30 30 Z" fill="#9aa0a8" />
-        <text x="22" y="58" fill="#9aa0a8" fontSize="9" textAnchor="middle">Compresor</text>
+        <text x="22" y="58" fill="#9aa0a8" fontSize="9" textAnchor="middle">Compressor</text>
         <line x1="37" y1="30" x2="62" y2="30" stroke={AIR} strokeWidth="2.4" />
         <rect x="62" y="14" width="30" height="32" rx="8" fill="#10151c" stroke="#9aa0a8" />
-        <text x="77" y="58" fill="#9aa0a8" fontSize="9" textAnchor="middle">Depósito</text>
+        <text x="77" y="58" fill="#9aa0a8" fontSize="9" textAnchor="middle">Tank</text>
         <line x1="92" y1="30" x2="116" y2="30" stroke={AIR} strokeWidth="2.4" />
         <rect x="116" y="18" width="14" height="24" fill="none" stroke="#9aa0a8" />
         <rect x="130" y="18" width="14" height="24" fill="none" stroke="#9aa0a8" />
@@ -389,7 +389,7 @@ export function SupplyNode(){
         <line x1="158" y1="30" x2="182" y2="30" stroke={AIR} strokeWidth="2.4" />
         <circle cx="198" cy="30" r="14" fill="none" stroke="#9aa0a8" strokeWidth="1.6" />
         <line x1="198" y1="30" x2="206" y2="22" stroke={AMB} strokeWidth="1.6" />
-        <text x="198" y="58" fill="#9aa0a8" fontSize="9" textAnchor="middle">Manómetro</text>
+        <text x="198" y="58" fill="#9aa0a8" fontSize="9" textAnchor="middle">Gauge</text>
         <line x1="212" y1="30" x2="270" y2="30" stroke={AIR} strokeWidth="2.6" />
         <line x1="270" y1="30" x2="270" y2="6" stroke={AIR} strokeWidth="2.6" />
       </svg>
@@ -397,7 +397,7 @@ export function SupplyNode(){
   );
 }
 
-// ---------- Fuente 24 VDC ----------
+// ---------- 24 VDC power supply ----------
 export function Supply24Node(){
   return (
     <div style={{ width:90, height:80, position:'relative' }}>
@@ -416,15 +416,15 @@ export function Supply24Node(){
   );
 }
 
-// ---------- Torreta ----------
-export function TorretaNode({ data }){
+// ---------- Signal tower ----------
+export function TowerNode({ data }){
   const sim = data.sim || {};
   const seg = [['#e5534b', sim.emerg], ['#e3b341', false], [GRN, sim.sysOn && !sim.emerg]];
   return (
-    <div title="Torreta de señalización (pilotos por salidas Q)" style={{ width:46, height:100, position:'relative' }}>
-      <Handle type="target" position={Position.Right} id="in_run" title="H_RUN ← Q0.6 (señal)" style={{ ...hStyle(GRN), top: 30 }} />
-      <Handle type="target" position={Position.Right} id="in_emg" title="H_EMG ← Q0.7 (señal)" style={{ ...hStyle(GRN), top: 56 }} />
-      <Handle type="source" position={Position.Bottom} id="com" title="Común 0 V (retorno a M)" style={{ ...hStyle('#539bf5'), left: 23 }} />
+    <div title="Signal tower (lamps driven by Q outputs)" style={{ width:46, height:100, position:'relative' }}>
+      <Handle type="target" position={Position.Right} id="in_run" title="H_RUN ← Q0.6 (signal)" style={{ ...hStyle(GRN), top: 30 }} />
+      <Handle type="target" position={Position.Right} id="in_emg" title="H_EMG ← Q0.7 (signal)" style={{ ...hStyle(GRN), top: 56 }} />
+      <Handle type="source" position={Position.Bottom} id="com" title="Common 0 V (return to M)" style={{ ...hStyle('#539bf5'), left: 23 }} />
       <svg width="46" height="100">
         {seg.map((sgmt, k) => <rect key={k} x="8" y={6+k*26} width="30" height="24" rx="5"
           fill={sgmt[1] ? sgmt[0] : '#23262c'} stroke="rgba(0,0,0,.35)" />)}
@@ -436,5 +436,5 @@ export function TorretaNode({ data }){
 
 export const nodeTypes = {
   plc: PLCNode, button: ButtonNode, mush: MushNode, module: ModuleNode,
-  supply: SupplyNode, supply24: Supply24Node, torreta: TorretaNode,
+  supply: SupplyNode, supply24: Supply24Node, tower: TowerNode,
 };
