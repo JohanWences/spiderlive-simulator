@@ -1,5 +1,7 @@
 # SpiderLive Simulator
 
+![SpiderLive Simulator — vista general del circuito electroneumático](docs/screenshot.png)
+
 Simulador web **electroneumático** interactivo construido con **React + Vite + React Flow**.
 Modela una "araña voladora" de feria: 6 cilindros neumáticos controlados por un PLC que ejecuta
 una secuencia de 22 pasos (port de un programa en Texto Estructurado verificado).
