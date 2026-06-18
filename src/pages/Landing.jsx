@@ -3,7 +3,7 @@ import { navigate } from '../router.jsx';
 import { T } from '../theme.js';
 import SimPreview from './SimPreview.jsx';
 import SiteFooter from './SiteFooter.jsx';
-import { GitHubIcon, REPO_URL } from '../icons.jsx';
+import { GitHubIcon, REPO_URL, IconPlay } from '../icons.jsx';
 import logo from '../assets/spiderlive-logo-blue.png';
 
 const ghost = {
@@ -28,6 +28,10 @@ export default function Landing() {
       }}>
         <img src={logo} alt="SpiderLive" style={{ height: 46, width: 'auto' }} />
         <div style={{ display: 'flex', gap: 22, alignItems: 'center' }}>
+          <button onClick={() => navigate('/community')}
+            style={{ background: 'transparent', color: T.muted, border: 'none', cursor: 'pointer', fontSize: 14.5, fontWeight: 600 }}>
+            Community
+          </button>
           <button onClick={() => navigate('/docs')}
             style={{ background: 'transparent', color: T.muted, border: 'none', cursor: 'pointer', fontSize: 14.5, fontWeight: 600 }}>
             Docs
@@ -76,19 +80,19 @@ export default function Landing() {
 
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             <button style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-              onClick={() => navigate('/simulator')}>
+              onClick={() => navigate('/home')}>
               <span style={{
-                display: 'inline-block', background: T.grad, color: '#04121f', fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', gap: 9, background: T.grad, color: '#04121f', fontWeight: 700,
                 fontSize: 15, borderRadius: 12, padding: '14px 28px', boxShadow: `0 10px 28px ${T.glow}`,
               }}>
-                ▶ Launch Simulator
+                <IconPlay size={15} /> Launch Simulator
               </span>
             </button>
             <button style={ghost}
               onMouseEnter={e => { e.currentTarget.style.background = T.border; }}
               onMouseLeave={e => { e.currentTarget.style.background = T.panel2; }}
-              onClick={() => navigate('/home')}>
-              Browse Projects
+              onClick={() => navigate('/community')}>
+              Explore Community
             </button>
           </div>
         </div>

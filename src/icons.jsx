@@ -2,6 +2,38 @@ import React from 'react';
 
 export const REPO_URL = 'https://github.com/JohanWences/spiderlive-simulator';
 
+// ---- Monochrome line/solid icon set (no emojis) ----
+function S({ size = 18, w = 2, children, style }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', ...style }}>{children}</svg>;
+}
+function F({ size = 18, children, style }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ display: 'block', ...style }}>{children}</svg>;
+}
+
+export const IconSearch = (p) => <S {...p}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></S>;
+export const IconPanel = (p) => <S {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></S>;
+export const IconComponents = (p) => <S {...p}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></S>;
+export const IconCpu = (p) => <S {...p}><rect x="6" y="6" width="12" height="12" rx="1.5" /><rect x="9.5" y="9.5" width="5" height="5" rx="0.5" /><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2" /></S>;
+export const IconPlay = (p) => <F {...p}><path d="M7 5l12 7-12 7z" /></F>;
+export const IconStop = (p) => <F {...p}><rect x="6" y="6" width="12" height="12" rx="1.5" /></F>;
+export const IconAlert = (p) => <S {...p}><path d="M12 3L2 20h20z" /><path d="M12 9v5" /><path d="M12 17.5h.01" /></S>;
+export const IconReset = (p) => <S {...p}><path d="M3 9a9 9 0 1 1-2 5" /><path d="M3 4v5h5" /></S>;
+export const IconFit = (p) => <S {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></S>;
+export const IconFolder = (p) => <S {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></S>;
+export const IconFile = (p) => <S {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></S>;
+export const IconSettings = (p) => <S {...p}><path d="M4 7h10M18 7h2" /><circle cx="16" cy="7" r="2" /><path d="M4 17h6M14 17h6" /><circle cx="12" cy="17" r="2" /></S>;
+export const IconLink = (p) => <S {...p}><path d="M9 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1" /><path d="M15 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1" /></S>;
+export const IconGrip = (p) => <F {...p}><circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" /></F>;
+export const IconChevron = (p) => <S {...p}><path d="M9 6l6 6-6 6" /></S>;
+export const IconPlus = (p) => <S {...p}><path d="M12 5v14M5 12h14" /></S>;
+export const IconStar = (p) => <F {...p}><path d="M12 2l2.9 6.3 6.6.6-5 4.4 1.5 6.4L12 16.9 6 20.1l1.5-6.4-5-4.4 6.6-.6z" /></F>;
+export const IconMail = (p) => <S {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></S>;
+export const IconX = (p) => <S {...p}><path d="M6 6l12 12M18 6L6 18" /></S>;
+export const IconArrowLeft = (p) => <S {...p}><path d="M19 12H5M12 19l-7-7 7-7" /></S>;
+export const IconLogout = (p) => <S {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></S>;
+export const IconGlobe = (p) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z" /></S>;
+export const IconBook = (p) => <S {...p}><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 5v14" /></S>;
+
 export function GoogleIcon({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true" style={{ display: 'block' }}>

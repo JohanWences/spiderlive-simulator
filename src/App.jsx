@@ -4,7 +4,19 @@ import '@xyflow/react/dist/style.css';
 import { nodeTypes, edgeTypes, clearEdgePaths, edgeDragRegistry } from './nodes.jsx';
 import * as E from './engine.js';
 import { makeNodes, makeEdges, paintNodes, paintEdges, savePos, LS_POS } from './graph.js';
+import { IconPlay, IconStop, IconAlert, IconReset, IconFit } from './icons.jsx';
 import spiderLiveLogo from './assets/spiderlive-logo.png';
+
+// Default data for components dropped from the Library (kept renderable + crash-safe).
+export const DROP_DATA = {
+  plc:      () => ({ sim:{} }),
+  module:   () => ({ i:null, pos:0, on:false }),
+  button:   (lab) => ({ col:'#444c56', on:false, lab:(lab||'BTN').slice(0,6).toUpperCase(), onClick:()=>{} }),
+  mush:     () => ({ on:false, onClick:()=>{} }),
+  supply:   () => ({}),
+  supply24: () => ({}),
+  tower:    () => ({ sim:{} }),
+};
 
 const DOCS = {
   module:   { n:'Double-acting cylinder + 5/2 solenoid valve', d:'ISO 1219 linear actuator (barrel, piston, rod, cushioning) driven by a single-solenoid 5/2 valve (solenoid 14 + spring return 12). a0/a1 reed switches on the barrel.', u:'https://www.festo.com/us/en/search/?text=pneumatic%20cylinders' },
@@ -20,7 +32,7 @@ const btnCss = (bg, fg='#0b0e13') => ({ background:bg, color:fg, border:'none', 
 const chip = { background:'#161b22', border:'1px solid #2a313c', borderRadius:7, padding:'3px 8px', color:'#8b949e' };
 
 
-function Flow(){
+function Flow({ embedded }){
   const rf = useReactFlow();
   const sim = useRef(E.newSim());
   const initN = useMemo(() => makeNodes(sim), []);
@@ -34,6 +46,7 @@ function Flow(){
   const [live, setLive] = useState(false);                       // false = Edit (frozen) · true = animated Simulation
   const hotRef = useRef(null);                                   // id of the highlighted wire (for the rAF loop)
   const hovT = useRef(0);
+  const dropRef = useRef(0);
 
   // Pushes the current state onto nodes/wires. animate=true → animated flow on wires. Only recreates what changed.
   const applyState = useCallback((animate) => {
@@ -145,6 +158,22 @@ function Flow(){
 
   const hudOf = (s) => ({ step:s.step, mode:E.mode(s.step), status: s.emerg?'EMERGENCY' : s.sysOn?'RUNNING':'STOPPED' });
 
+  // ---- Drag-and-drop: place a component dragged from the Library ----
+  const addNode = (type, position, label) => {
+    const make = DROP_DATA[type]; if (!make) return;
+    const id = `n_${type}_${++dropRef.current}`;
+    setNodes(nds => [...nds, { id, type, position, data: make(label) }]);
+  };
+  const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  const onDrop = (e) => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('application/spiderlive');
+    if (!type) return;
+    const label = e.dataTransfer.getData('application/spiderlive-label');
+    const position = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    addNode(type, position, label);
+  };
+
   useEffect(() => {                                              // SIMULATION: continuous animation loop
     if (!live) return;
     let raf, prev = performance.now();
@@ -167,8 +196,9 @@ function Flow(){
   }, [live, applyState]);
 
   return (
-    <div style={{ width:'100vw', height:'100vh', background:'#0b0e13' }}
-         onPointerDown={onCanvasPointerDown} onPointerMove={onCanvasPointerMove} onDoubleClick={onCanvasDblClick}>
+    <div style={{ width: embedded ? '100%' : '100vw', height: embedded ? '100%' : '100vh', background:'#0b0e13', position:'relative' }}
+         onPointerDown={onCanvasPointerDown} onPointerMove={onCanvasPointerMove} onDoubleClick={onCanvasDblClick}
+         onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
         onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
         onNodeDragStop={() => setNodes(nds => { savePos(nds); return nds; })}
@@ -185,6 +215,31 @@ function Flow(){
         return <div style={{ position:'absolute', left:L, top:T, width:W, height:H, zIndex:6, pointerEvents:'none',
           border:'1.5px '+(cr?'dashed #2ec27e':'solid #4aa3ff'), background:(cr?'#2ec27e22':'#4aa3ff1f') }} />;
       })()}
+      {embedded && (
+        <div style={{ position:'absolute', top:10, left:10, zIndex:10, display:'flex', alignItems:'center', gap:6,
+                      background:'#0d1117ee', border:'1px solid #2a313c', borderRadius:10, padding:'6px 8px', flexWrap:'wrap' }}>
+          <span style={{ ...chip, font:'600 11px system-ui', display:'inline-flex', alignItems:'center', gap:6 }}>
+            <span style={{ width:7, height:7, borderRadius:99, display:'inline-block',
+              background: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#8b949e' }} />
+            <b style={{ color: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#e6edf3' }}>{hud.status}</b>
+          </span>
+          <span style={{ ...chip, font:'600 11px system-ui' }}>Step <b style={{ color:'#e6edf3' }}>{hud.step}</b>/22</span>
+          <span style={{ ...chip, font:'600 11px system-ui' }}><b style={{ color:'#e6edf3' }}>{hud.mode}</b></span>
+          <button style={{ ...btnCss(live?'#e3b341':'#3a414c', live?'#0b0e13':'#e6edf3'), padding:'7px 12px' }} onClick={() => setLive(v => !v)} title="Edit / Simulation">{live ? 'Simulation' : 'Edit'}</button>
+          {[['Start', IconPlay, '#2ec27e', '#0b0e13', () => { setLive(true); E.start(sim.current); }],
+            ['Stop', IconStop, '#cdd9e5', '#0b0e13', () => E.stop(sim.current)],
+            ['Emergency stop', IconAlert, '#e5534b', '#fff', () => E.eStop(sim.current)],
+            ['Reset', IconReset, '#3a414c', '#e6edf3', () => E.reset(sim.current)],
+            ['Arrange', IconFit, '#3a414c', '#e6edf3', () => { localStorage.removeItem(LS_POS); clearEdgePaths(); setNodes(makeNodes(sim)); setEdges(makeEdges()); }]
+          ].map(([title, Ic, bg, fg, onClick]) => (
+            <button key={title} title={title} onClick={onClick}
+              style={{ ...btnCss(bg, fg), padding:'8px 9px', display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
+              <Ic size={14} />
+            </button>
+          ))}
+        </div>
+      )}
+      {!embedded && (
       <div style={{ position:'absolute', top:12, left:12, zIndex:10,
                     background:'#0d1117ee', border:'1px solid #2a313c', borderRadius:13,
                     padding:'10px 14px', boxShadow:'0 8px 26px #000a' }}>
@@ -197,26 +252,30 @@ function Flow(){
         </div>
         <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap', font:'600 11px system-ui' }}>
           <span style={chip}>
-            <span style={{ color: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#8b949e' }}>●</span>{' '}
+            <span style={{ width:7, height:7, borderRadius:99, display:'inline-block', marginRight:5, background: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#8b949e' }} />
             <b style={{ color: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#e6edf3' }}>{hud.status}</b>
           </span>
           <span style={chip}>Step <b style={{ color:'#e6edf3' }}>{hud.step}</b>/22</span>
           <span style={chip}><b style={{ color:'#e6edf3' }}>{hud.mode}</b></span>
           <span style={{ ...chip, color: live?'#e3b341':'#8b949e', borderColor: live?'#5a4a1e':'#2a313c' }}>
-            {live ? '◉ Simulation' : '✎ Edit'}
+            {live ? 'Simulation' : 'Edit'}
           </span>
         </div>
       </div>
+      )}
+      {!embedded && (
       <div style={{ position:'absolute', bottom:16, left:16, display:'flex', gap:8, zIndex:10 }}>
         <button style={btnCss(live?'#e3b341':'#3a414c', live?'#0b0e13':'#e6edf3')} onClick={() => setLive(v => !v)}
                 title="Edit = frozen and lightweight · Simulation = live animation (sensors and flow on the wires)">
-          {live ? '◉ Simulation' : '✎ Edit'}</button>
-        <button style={btnCss('#2ec27e')} onClick={() => { setLive(true); E.start(sim.current); }}>▶ START</button>
+          {live ? 'Simulation' : 'Edit'}</button>
+        <button style={btnCss('#2ec27e')} onClick={() => { setLive(true); E.start(sim.current); }}>START</button>
         <button style={btnCss('#cdd9e5')} onClick={() => E.stop(sim.current)}>STOP</button>
         <button style={btnCss('#e5534b','#fff')} onClick={() => E.eStop(sim.current)}>E-STOP</button>
-        <button style={btnCss('#3a414c','#e6edf3')} onClick={() => E.reset(sim.current)}>↺ Reset</button>
-        <button style={btnCss('#3a414c','#e6edf3')} onClick={() => { localStorage.removeItem(LS_POS); clearEdgePaths(); setNodes(makeNodes(sim)); setEdges(makeEdges()); }}>⤢ Arrange</button>
+        <button style={btnCss('#3a414c','#e6edf3')} onClick={() => E.reset(sim.current)}>Reset</button>
+        <button style={btnCss('#3a414c','#e6edf3')} onClick={() => { localStorage.removeItem(LS_POS); clearEdgePaths(); setNodes(makeNodes(sim)); setEdges(makeEdges()); }}>Arrange</button>
       </div>
+      )}
+      {!embedded && (
       <div style={{ position:'absolute', top:58, right:12, width:236, zIndex:10, display:'flex', flexDirection:'column', gap:6 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
                       color:'#8b949e', font:'12px system-ui',
@@ -239,14 +298,15 @@ function Flow(){
           </a>
         ))}
       </div>
+      )}
     </div>
   );
 }
 
-export default function App(){
+export default function App({ embedded = false }){
   return (
     <ReactFlowProvider>
-      <Flow />
+      <Flow embedded={embedded} />
     </ReactFlowProvider>
   );
 }

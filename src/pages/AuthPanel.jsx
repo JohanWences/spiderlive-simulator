@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { T } from '../theme.js';
 import { Field, primaryBtn } from './auth-ui.jsx';
-import { GoogleIcon } from '../icons.jsx';
+import { GoogleIcon, IconMail } from '../icons.jsx';
 import { signInWithGoogle, sendMagicLink } from '../auth.jsx';
 
 const googleBtn = {
@@ -33,7 +33,7 @@ export default function AuthPanel({ signup }) {
   if (sent) {
     return (
       <div style={{ textAlign: 'center', padding: '8px 0' }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, color: T.blueLt }}><IconMail size={38} /></div>
         <h3 style={{ margin: '0 0 8px', fontSize: 17 }}>Check your inbox</h3>
         <p style={{ color: T.muted, fontSize: 14, margin: 0 }}>
           We sent a magic link to <b style={{ color: T.text }}>{email}</b>. Click it to {signup ? 'finish signing up' : 'sign in'}.

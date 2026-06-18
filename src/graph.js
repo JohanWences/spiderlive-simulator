@@ -76,7 +76,9 @@ export function makeEdges(persist = true){
 export function paintNodes(s, nds){
   return nds.map(n => {
     if (n.type === 'module'){
-      const i = n.data.i, pos = s.pos[i], on = E.solenoid(s,i);
+      const i = n.data.i;
+      if (typeof i !== 'number' || i < 0 || i > 5) return n;   // dropped/extra cylinders stay static (not wired to the engine)
+      const pos = s.pos[i], on = E.solenoid(s,i);
       return (n.data.pos === pos && n.data.on === on) ? n : { ...n, data:{ ...n.data, pos, on } };
     }
     if (n.type === 'plc'){

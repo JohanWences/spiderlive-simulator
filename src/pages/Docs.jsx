@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { navigate } from '../router.jsx';
 import { T } from '../theme.js';
-import { GitHubIcon, REPO_URL } from '../icons.jsx';
+import { GitHubIcon, REPO_URL, IconSearch, IconPlay } from '../icons.jsx';
 import SiteFooter from './SiteFooter.jsx';
 import logo from '../assets/spiderlive-logo-blue.png';
 
@@ -156,7 +156,7 @@ export default function Docs() {
           <img src={logo} alt="SpiderLive" style={{ height: 34 }} />
         </button>
         <div style={{ flex: 1, maxWidth: 420, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: T.panel2, border: `1px solid ${T.border}`, borderRadius: 10 }}>
-          <span style={{ color: T.faint, fontSize: 14 }}>🔍</span>
+          <span style={{ color: T.faint, display: 'flex' }}><IconSearch size={15} /></span>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search docs"
             style={{ border: 'none', outline: 'none', background: 'transparent', color: T.text, fontSize: 14, width: '100%' }} />
         </div>
@@ -166,8 +166,8 @@ export default function Docs() {
             <GitHubIcon size={20} />
           </a>
           <button onClick={() => navigate('/simulator')}
-            style={{ background: T.grad, color: '#04121f', border: 'none', borderRadius: 11, padding: '9px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-            ▶ Launch
+            style={{ display: 'flex', alignItems: 'center', gap: 8, background: T.grad, color: '#04121f', border: 'none', borderRadius: 11, padding: '9px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+            <IconPlay size={13} /> Launch
           </button>
         </div>
       </nav>

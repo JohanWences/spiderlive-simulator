@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { navigate } from '../router.jsx';
 import { T } from '../theme.js';
 import { useAuth, signOut } from '../auth.jsx';
+import { IconPlus, IconFolder, IconGlobe, IconBook, IconLogout, IconArrowLeft, IconSearch } from '../icons.jsx';
 import logo from '../assets/spiderlive-logo-blue.png';
 
 // ---- Seed projects (a real catalog would come from disk / a backend later) ----
@@ -32,7 +33,7 @@ function ProjectCard({ p }) {
       }} />
       <div style={{ position: 'absolute', inset: 0, padding: '20px 18px 18px', boxSizing: 'border-box',
                     display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-        <div style={{ position: 'absolute', top: 16, right: 16, fontSize: 22, opacity: h ? 1 : 0.6, transition: 'opacity .14s' }}>🕸️</div>
+        <div style={{ position: 'absolute', top: 14, right: 14, opacity: h ? 1 : 0.5, transition: 'opacity .14s', color: T.blueLt }}><IconFolder size={20} /></div>
         <div style={{ fontSize: 17, fontWeight: 700, color: T.text, marginBottom: 6 }}>{p.name}</div>
         <div style={{ fontSize: 12, color: T.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.path}</div>
         <div style={{ fontSize: 11, color: T.faint, marginTop: 3 }}>{p.modified}</div>
@@ -53,26 +54,26 @@ function NewCard() {
         color: h ? T.blueLt : T.muted, display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', gap: 10, transition: 'all .14s',
       }}>
-      <span style={{ fontSize: 34, lineHeight: 1 }}>＋</span>
+      <IconPlus size={30} />
       <span style={{ fontSize: 14, fontWeight: 600 }}>New project</span>
     </button>
   );
 }
 
 // ---------------- Sidebar item ----------------
-function NavItem({ icon, label, onClick, primary, active }) {
+function NavItem({ Icon, label, onClick, primary, active }) {
   const [h, setH] = useState(false);
   return (
     <button onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+        display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left',
         border: primary ? 'none' : `1px solid ${h ? T.border2 : 'transparent'}`, cursor: 'pointer',
         borderRadius: 10, padding: '11px 14px', fontSize: 14.5, fontWeight: primary ? 700 : 500,
         color: primary ? '#fff' : (active ? T.text : T.muted),
         background: primary ? T.blue : (h || active ? T.panel2 : 'transparent'),
         boxShadow: primary ? `0 6px 16px ${T.glow}` : 'none', transition: 'all .12s',
       }}>
-      <span style={{ fontSize: 17, lineHeight: 1, width: 20, textAlign: 'center' }}>{icon}</span>
+      <span style={{ width: 20, display: 'inline-flex', justifyContent: 'center' }}><Icon size={17} /></span>
       {label}
     </button>
   );
@@ -105,9 +106,10 @@ export default function Home() {
           Workspace
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <NavItem icon="＋" label="New Project" primary onClick={() => navigate('/simulator')} />
-          <NavItem icon="📂" label="Open" onClick={() => navigate('/simulator')} />
-          <NavItem icon="🎬" label="Tutorials" onClick={() => window.open('https://reactflow.dev/learn', '_blank', 'noopener')} />
+          <NavItem Icon={IconPlus} label="New Project" primary onClick={() => navigate('/simulator')} />
+          <NavItem Icon={IconFolder} label="Open" onClick={() => navigate('/simulator')} />
+          <NavItem Icon={IconGlobe} label="Community" onClick={() => navigate('/community')} />
+          <NavItem Icon={IconBook} label="Tutorials" onClick={() => navigate('/docs')} />
         </div>
 
         <div style={{ flex: 1 }} />
@@ -119,8 +121,8 @@ export default function Home() {
           </div>
         )}
         {user
-          ? <NavItem icon="⎋" label="Sign out" onClick={async () => { await signOut(); navigate('/'); }} />
-          : <NavItem icon="←" label="Exit to landing" onClick={() => navigate('/')} />}
+          ? <NavItem Icon={IconLogout} label="Sign out" onClick={async () => { await signOut(); navigate('/'); }} />
+          : <NavItem Icon={IconArrowLeft} label="Exit to landing" onClick={() => navigate('/')} />}
       </aside>
 
       {/* ---------------- Main ---------------- */}
@@ -136,7 +138,7 @@ export default function Home() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 30 }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 11, padding: '11px 16px',
                         background: T.panel2, border: `1px solid ${T.border}`, borderRadius: 12, maxWidth: 460 }}>
-            <span style={{ color: T.faint, fontSize: 15 }}>🔍</span>
+            <span style={{ color: T.faint, display: 'flex' }}><IconSearch size={15} /></span>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search for a project"
               style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14.5, width: '100%', color: T.text }} />
           </div>
