@@ -43,7 +43,7 @@ function Flow({ embedded }){
   const [docKey, setDocKey] = useState(null);
   const [docsOpen, setDocsOpen] = useState(true);
   const [sel, setSel] = useState(null);                          // selection box (screen coords)
-  const [live, setLive] = useState(embedded);                    // embedded workspace runs live; false = frozen edit
+  const [live, setLive] = useState(false);                       // Start → live simulation · Pause → frozen, nothing simulated
   const hotRef = useRef(null);                                   // id of the highlighted wire (for the rAF loop)
   const hovT = useRef(0);
   const dropRef = useRef(0);
@@ -234,7 +234,7 @@ function Flow({ embedded }){
             style={{ ...btnCss('#2ec27e'), padding:'8px 13px', display:'inline-flex', alignItems:'center', gap:7 }}>
             <IconPlay size={14} /> Start
           </button>
-          <button title="Pause" onClick={() => E.stop(sim.current)}
+          <button title="Pause — full stop, nothing is simulated" onClick={() => { setLive(false); E.stop(sim.current); }}
             style={{ ...btnCss('#cdd9e5'), padding:'8px 13px', display:'inline-flex', alignItems:'center', gap:7 }}>
             <IconPause size={14} /> Pause
           </button>

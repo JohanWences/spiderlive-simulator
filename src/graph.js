@@ -73,8 +73,7 @@ export function makeEdges(persist = true){
 }
 
 // ---------- Painting: push a sim state onto nodes/edges (only recreate what changed) ----------
-export function paintNodes(s, nds){
-  return nds.map(n => {
+function paintNode(s, n){
     if (n.data && n.data._static) return n;                     // placed components keep their own independent state
     if (n.type === 'module'){
       const i = n.data.i;
@@ -100,12 +99,18 @@ export function paintNodes(s, nds){
     }
     if (n.type === 'mush') return (n.data.on === s.emerg) ? n : { ...n, data:{ ...n.data, on: s.emerg } };
     return n;
-  });
+}
+
+// Returns the SAME array when nothing changed, so React Flow doesn't re-render
+// every animation frame (which would interrupt connection dragging in live mode).
+export function paintNodes(s, nds){
+  let changed = false;
+  const out = nds.map(n => { const m = paintNode(s, n); if (m !== n) changed = true; return m; });
+  return changed ? out : nds;
 }
 
 // animate=true → flow animation on active wires. hotId = id of a hover-highlighted wire (full app only).
-export function paintEdges(s, eds, animate = false, hotId = null){
-  return eds.map(e => {
+function paintEdge(s, e, animate, hotId){
     const k = e.data?.kind;
     if (k === 'wire') return e;                                  // user-drawn connections keep their own style
     let on = false, col = '#39414d';
@@ -121,5 +126,11 @@ export function paintEdges(s, eds, animate = false, hotId = null){
     const width  = e.selected ? 3 : (e.id === hotId ? 3.5 : (on ? 2.5 : 1.5));
     if (e.animated === anim && e.style && e.style.stroke === stroke && e.style.strokeWidth === width) return e;
     return { ...e, animated:anim, style:{ stroke, strokeWidth:width } };
-  });
+}
+
+// animate=true → flow animation on active wires. hotId = id of a hover-highlighted wire (full app only).
+export function paintEdges(s, eds, animate = false, hotId = null){
+  let changed = false;
+  const out = eds.map(e => { const m = paintEdge(s, e, animate, hotId); if (m !== e) changed = true; return m; });
+  return changed ? out : eds;
 }
