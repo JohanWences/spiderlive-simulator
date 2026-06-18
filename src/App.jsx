@@ -5,6 +5,7 @@ import { nodeTypes, edgeTypes, clearEdgePaths, edgeDragRegistry, PLC_ADDR } from
 import * as E from './engine.js';
 import { makeNodes, makeEdges, paintNodes, paintEdges, savePos, LS_POS, loadIO, saveIO } from './graph.js';
 import { IconPlay, IconPause } from './icons.jsx';
+import { useBridge } from './bridge-client.js';
 import spiderLiveLogo from './assets/spiderlive-logo.png';
 
 // Default data for components dropped from the Library (kept renderable + crash-safe).
@@ -54,6 +55,7 @@ function Flow({ embedded }){
   const hovT = useRef(0);
   const dropRef = useRef(0);
   const [selNode, setSelNode] = useState(null);                  // node selected for I/O binding
+  const bridge = useBridge();                                    // live link to the local bridge → OpenPLC
 
   // Pushes the current state onto nodes/wires. animate=true → animated flow on wires. Only recreates what changed.
   const applyState = useCallback((animate) => {
@@ -256,6 +258,10 @@ function Flow({ embedded }){
             <span style={{ width:7, height:7, borderRadius:99, display:'inline-block',
               background: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#8b949e' }} />
             <b style={{ color: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#e6edf3' }}>{hud.status}</b>
+          </span>
+          <span style={{ ...chip, font:'600 11px system-ui', display:'inline-flex', alignItems:'center', gap:6 }} title={bridge ? 'Connected to the local bridge → OpenPLC' : 'Bridge offline (run: npx spiderlive-bridge)'}>
+            <span style={{ width:7, height:7, borderRadius:99, display:'inline-block', background: bridge ? '#2ec27e' : '#5b6675' }} />
+            <b style={{ color: bridge ? '#2ec27e' : '#8b949e' }}>OpenPLC</b>
           </span>
           <button title="Start" onClick={() => { setLive(true); E.start(sim.current); }}
             style={{ ...btnCss('#2ec27e'), padding:'8px 13px', display:'inline-flex', alignItems:'center', gap:7 }}>

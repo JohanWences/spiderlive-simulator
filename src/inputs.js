@@ -16,3 +16,7 @@ export const setInput = (addr, on) => {
 
 export const useActiveInputs = () =>
   useSyncExternalStore(cb => { subs.add(cb); return () => subs.delete(cb); }, () => active, () => active);
+
+// Address ↔ bridge register index (must match the bridge's I/O map + the PLC terminals).
+export const IN_ADDRS = ['%IX0.0','%IX0.1','%IX0.2','%IX0.3','%IX0.4','%IX0.5','%IX0.6','%IX0.7','%IX1.0','%IX1.1','%IX1.2','%IX1.3','%IX1.4','%IX1.5','%IX8.0','%IX8.1'];
+export const OUT_ADDRS = ['%QX0.0','%QX0.1','%QX0.2','%QX0.3','%QX0.4','%QX0.5','%QX0.6','%QX0.7'];
