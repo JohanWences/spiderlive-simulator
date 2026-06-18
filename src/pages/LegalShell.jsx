@@ -16,7 +16,7 @@ export default function LegalShell({ title, updated, intro, sections }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '18px 32px', borderBottom: `1px solid ${T.border}`,
       }}>
-        <button onClick={() => navigate('/spiderlive')} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Back to home">
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Back to home">
           <img src={logo} alt="SpiderLive" style={{ height: 38 }} />
         </button>
         <button onClick={() => navigate('/docs')}

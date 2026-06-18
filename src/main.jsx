@@ -14,7 +14,7 @@ import { AuthProvider } from './auth.jsx';
 
 function Root() {
   const route = useRoute();
-  if (route === '/spiderlive') return <Landing />;
+  if (route === '/simulator') return <App />;
   if (route === '/home') return <Home />;
   if (route === '/docs') return <Docs />;
   if (route === '/signin') return <SignIn />;
@@ -22,7 +22,7 @@ function Root() {
   if (route === '/terms') return <Terms />;
   if (route === '/privacy') return <Privacy />;
   if (route === '/cookies') return <Cookies />;
-  return <App />;   // '/', '/simulator' and anything else → the simulator
+  return <Landing />;   // '/', '/spiderlive' (alias) and anything else → the landing
 }
 
 createRoot(document.getElementById('root')).render(

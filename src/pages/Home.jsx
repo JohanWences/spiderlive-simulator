@@ -96,7 +96,7 @@ export default function Home() {
         width: 248, flexShrink: 0, background: T.panel, borderRight: `1px solid ${T.border}`,
         display: 'flex', flexDirection: 'column', padding: '22px 16px',
       }}>
-        <button onClick={() => navigate('/spiderlive')}
+        <button onClick={() => navigate('/')}
           style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px 22px', textAlign: 'left' }}>
           <img src={logo} alt="SpiderLive" style={{ height: 26, width: 'auto', display: 'block' }} />
         </button>
@@ -119,8 +119,8 @@ export default function Home() {
           </div>
         )}
         {user
-          ? <NavItem icon="⎋" label="Sign out" onClick={async () => { await signOut(); navigate('/spiderlive'); }} />
-          : <NavItem icon="←" label="Exit to landing" onClick={() => navigate('/spiderlive')} />}
+          ? <NavItem icon="⎋" label="Sign out" onClick={async () => { await signOut(); navigate('/'); }} />
+          : <NavItem icon="←" label="Exit to landing" onClick={() => navigate('/')} />}
       </aside>
 
       {/* ---------------- Main ---------------- */}

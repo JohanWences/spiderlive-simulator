@@ -152,7 +152,7 @@ export default function Docs() {
         display: 'flex', alignItems: 'center', gap: 20, padding: '14px 28px', position: 'sticky', top: 0, zIndex: 10,
         borderBottom: `1px solid ${T.border}`, background: 'rgba(11,14,19,0.85)', backdropFilter: 'blur(8px)',
       }}>
-        <button onClick={() => navigate('/spiderlive')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
           <img src={logo} alt="SpiderLive" style={{ height: 34 }} />
         </button>
         <div style={{ flex: 1, maxWidth: 420, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: T.panel2, border: `1px solid ${T.border}`, borderRadius: 10 }}>

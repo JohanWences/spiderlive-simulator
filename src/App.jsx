@@ -189,7 +189,7 @@ function Flow(){
                     background:'#0d1117ee', border:'1px solid #2a313c', borderRadius:13,
                     padding:'10px 14px', boxShadow:'0 8px 26px #000a' }}>
         <div style={{ display:'flex', alignItems:'center' }}>
-          <a href="#/spiderlive" title="Go to the SpiderLive landing page"
+          <a href="#/" title="Go to the SpiderLive landing page"
              style={{ display:'block', lineHeight:0, cursor:'pointer' }}>
             <img src={spiderLiveLogo} alt="SpiderLive — An electro-pneumatic Web Simulator"
                  style={{ height:48, width:'auto', display:'block' }} />

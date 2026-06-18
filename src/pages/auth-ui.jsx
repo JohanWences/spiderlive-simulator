@@ -36,7 +36,7 @@ export function AuthShell({ title, subtitle, children, footer }) {
     }}>
       <div style={{ width: '100%', maxWidth: 404 }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <button onClick={() => navigate('/spiderlive')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+          <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}
             title="Back to home">
             <img src={logo} alt="SpiderLive" style={{ height: 40 }} />
           </button>
