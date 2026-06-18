@@ -190,7 +190,7 @@ export function PLCNode({ data }){
                {lab:'2L'},{id:'q4',lab:'.4'},{id:'q5',lab:'.5'},{id:'q6',lab:'.6'},{id:'q7',lab:'.7'}];
   const bx = k => 74 + k*34;
   return (
-    <div title="Siemens S7-1200 PLC · CPU 1214C AC/DC/RLY (14 DI / 10 relay DQ)" style={{ width:W, height:H, position:'relative' }}>
+    <div title="SPI-DRY UTM-S9-MEC PLC · CPU 231043 AC/DC/RLY (14 DI / 10 relay DQ)" style={{ width:W, height:H, position:'relative' }}>
       {di.map(([id,addr,c],k) => <Handle key={id} type="target" position={Position.Top} id={id} title={`${addr} · ${id}`} style={{ ...hStyle(sim.di&&sim.di[k] ? c : '#39414d'), left: dx(k), top: 13 }} />)}
       {bot.map((t,k) => t.id ? <Handle key={t.id} type="source" position={Position.Bottom} id={t.id} title={`Q0${t.lab} (relay)`} style={{ ...hStyle(sim.q&&sim.q[+t.id.slice(1)] ? GRN : '#2a4035'), left: bx(k), top: H-13 }} /> : null)}
       <Handle type="target" position={Position.Right} id="lplus" title="L+ 24 VDC" style={{ ...hStyle('#e5534b'), top: 50 }} />
@@ -214,9 +214,9 @@ export function PLCNode({ data }){
         <circle cx="24" cy="84" r="4" fill={!sim.sysOn?AMB:'#262b33'} /><text x="33" y="87" fill="#9aa0a8" fontSize="8">STOP</text>
         <circle cx="24" cy="100" r="4" fill={sim.emerg?'#e5534b':'#262b33'} /><text x="33" y="103" fill="#9aa0a8" fontSize="8">ERROR</text>
         {/* brand and model */}
-        <text x="116" y="82" fill="#eef1f5" fontFamily="Arial" fontWeight="bold" fontSize="20">SIEMENS</text>
-        <text x="116" y="100" fill="#aab0b8" fontSize="10">SIMATIC S7-1200</text>
-        <text x={W-14} y="70" fill="#aab0b8" fontSize="11" textAnchor="end">CPU 1214C</text>
+        <text x="116" y="82" fill="#eef1f5" fontFamily="Arial" fontWeight="bold" fontSize="20">SPI-DRY</text>
+        <text x="116" y="100" fill="#aab0b8" fontSize="10">UTM-S9-MEC</text>
+        <text x={W-14} y="70" fill="#aab0b8" fontSize="11" textAnchor="end">CPU 231043</text>
         <text x={W-14} y="85" fill="#9aa0a8" fontSize="10" textAnchor="end">AC/DC/RLY</text>
         {/* PROFINET */}
         <rect x="116" y={H-64} width="30" height="22" rx="3" fill="#2ec27e" />
