@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Handle, Position, BaseEdge, EdgeLabelRenderer, useReactFlow } from '@xyflow/react';
 import { LEG } from './engine.js';
-import { setInput, useActiveInputs } from './inputs.js';
+import { setInput, useActiveInputs, useActiveOutputs } from './inputs.js';
 
 // Wire registry: each edge publishes { drag, reset } and the canvas decides which one to grab (global hit-test, robust to overlaps).
 export const edgeDragRegistry = new Map();
@@ -196,6 +196,7 @@ export function PLCNode({ data }){
   const W = 520, H = 178;
   const sim = data.sim || { step:0, sysOn:false, emerg:false, q:[], di:[] };
   const active = useActiveInputs();                              // inputs lit by a pressed bound element
+  const activeOut = useActiveOutputs();                          // outputs (coils) the PLC is driving, from the bridge
   // DI INPUTS (top terminal strip): handle, address, color
   const di = [
     ['i_start','I0.0','#aab0b8'],['i_stop1','I0.1','#aab0b8'],['i_stop2','I0.2','#aab0b8'],['i_emerg','I0.3','#aab0b8'],
@@ -249,8 +250,11 @@ export function PLCNode({ data }){
         {/* PROFINET */}
         <rect x="116" y={H-64} width="30" height="22" rx="3" fill="#2ec27e" />
         <text x="131" y={H-67} fill="#7a828c" fontSize="6.5" textAnchor="middle">PROFINET</text>
-        {/* DQ status LEDs (red = relay) */}
-        {bot.map((t,k) => t.id ? <circle key={'ql'+k} cx={bx(k)} cy={H-46} r="3" fill={sim.q&&sim.q[+t.id.slice(1)]?'#e5534b':'#302424'} /> : null)}
+        {/* DQ status LEDs (red = relay) — lit by the sim OR by a coil the PLC drives */}
+        {bot.map((t,k) => { if (!t.id) return null;
+          const onLed = (sim.q && sim.q[+t.id.slice(1)]) || !!activeOut[PLC_ADDR[t.id]];
+          return <circle key={'ql'+k} cx={bx(k)} cy={H-46} r="3" fill={onLed?'#e5534b':'#302424'} />;
+        })}
         {/* bottom terminal strip (RELAY OUTPUTS) */}
         <rect x="6" y={H-25} width={W-12} height="22" rx="4" fill="#2b3038" stroke="#1c2026" />
         <text x="12" y={H-11} fill="#7a828c" fontSize="7" fontWeight="bold">DQa</text>

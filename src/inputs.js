@@ -20,3 +20,19 @@ export const useActiveInputs = () =>
 // Address ↔ bridge register index (must match the bridge's I/O map + the PLC terminals).
 export const IN_ADDRS = ['%IX0.0','%IX0.1','%IX0.2','%IX0.3','%IX0.4','%IX0.5','%IX0.6','%IX0.7','%IX1.0','%IX1.1','%IX1.2','%IX1.3','%IX1.4','%IX1.5','%IX8.0','%IX8.1'];
 export const OUT_ADDRS = ['%QX0.0','%QX0.1','%QX0.2','%QX0.3','%QX0.4','%QX0.5','%QX0.6','%QX0.7'];
+
+// Outputs (coils) the PLC is driving — fed from the bridge; lights output LEDs / elements.
+let activeOut = {};
+const outSubs = new Set();
+const sameMap = (a, b) => { const ka = Object.keys(a), kb = Object.keys(b); return ka.length === kb.length && ka.every(k => b[k]); };
+
+export const setOutputs = (coils) => {
+  const next = {};
+  OUT_ADDRS.forEach((a, i) => { if (coils && coils[i]) next[a] = true; });
+  if (sameMap(next, activeOut)) return;
+  activeOut = next;
+  outSubs.forEach(f => f());
+};
+
+export const useActiveOutputs = () =>
+  useSyncExternalStore(cb => { outSubs.add(cb); return () => outSubs.delete(cb); }, () => activeOut, () => activeOut);

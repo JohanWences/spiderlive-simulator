@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useActiveInputs, IN_ADDRS } from './inputs.js';
+import { useActiveInputs, IN_ADDRS, setOutputs } from './inputs.js';
 
 const BRIDGE_URL = 'ws://localhost:8080';
 
@@ -21,7 +21,7 @@ export function useBridge() {
       ws.onopen = () => setConnected(true);
       ws.onclose = () => { setConnected(false); if (wsRef.current === ws) wsRef.current = null; if (!stopped) retry = setTimeout(connect, 3000); };
       ws.onerror = () => { try { ws.close(); } catch {} };
-      // ws.onmessage → coils (outputs) will drive elements in a later step
+      ws.onmessage = (ev) => { try { const m = JSON.parse(ev.data); if (m.type === 'coils') setOutputs(m.coils); } catch {} };
     };
     connect();
     return () => { stopped = true; clearTimeout(retry); try { wsRef.current?.close(); } catch {} };
