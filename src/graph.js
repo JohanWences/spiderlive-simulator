@@ -31,7 +31,8 @@ export const loadCanvas = () => { try { return JSON.parse(localStorage.getItem(p
 export const saveCanvas = (nodes, edges) => {
   // JSON.stringify drops function-valued data (onClick/lit) — rebuilt from DROP_DATA on load.
   const N = nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: n.data }));
-  const Ed = edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle }));
+  // route = the wire's waypoints (the wiring "shape") — persisted so bends survive a reload.
+  const Ed = edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, route: e.data?.route || null }));
   try { localStorage.setItem(pkey(LS_CANVAS), JSON.stringify({ nodes: N, edges: Ed })); } catch {}
 };
 

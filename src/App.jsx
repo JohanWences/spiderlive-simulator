@@ -38,7 +38,7 @@ function rebuildCanvas(){
   });
   const edges = (saved.edges || []).map(e => ({
     id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle,
-    type: 'tag', data: { kind: 'wire', tagAt: 'target' }, style: { stroke: '#8b949e', strokeWidth: 2 } }))
+    type: 'tag', data: { kind: 'wire', tagAt: 'target', route: e.route || null }, style: { stroke: '#8b949e', strokeWidth: 2 } }))
     .filter(e => seen.has(e.source) && seen.has(e.target));      // drop wires that referenced a removed duplicate
   return { nodes, edges };
 }

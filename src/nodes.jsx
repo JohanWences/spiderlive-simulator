@@ -104,6 +104,21 @@ function insertForDrag(route, k, vert, S, T, sp, tp){
   }
   return { work:w, iStart:a, iEnd:b };
 }
+// Drop redundant points (duplicates + collinear) so deleting a waypoint straightens the wire.
+function cleanRoute(pts){
+  const out = [];
+  for (const p of pts){
+    const last = out[out.length-1];
+    if (last && Math.abs(last.x-p.x) < 0.5 && Math.abs(last.y-p.y) < 0.5) continue;
+    out.push({ x:p.x, y:p.y });
+  }
+  for (let i = 1; i < out.length - 1; ){
+    const a = out[i-1], b = out[i], c = out[i+1];
+    if ((Math.abs(a.x-b.x) < 0.5 && Math.abs(b.x-c.x) < 0.5) || (Math.abs(a.y-b.y) < 0.5 && Math.abs(b.y-c.y) < 0.5)) out.splice(i, 1);
+    else i++;
+  }
+  return out;
+}
 
 // ---------- Edge: label anchored to the TERMINAL + draggable break point ----------
 // Hover over the wire → a grip appears; drag it to move the wire; double-click = back to automatic.
@@ -153,6 +168,21 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
   };
   const reset = () => setEdges(eds => { const r = eds.map(ed => ed.id === id ? { ...ed, data:{ ...ed.data, route:null } } : ed); saveEdgePaths(r); return r; });
 
+  // waypoint editing: show handles on hover, delete a waypoint → the wire straightens
+  const [hover, setHover] = useState(false);
+  const hoverT = useRef(0);
+  const enter = () => { clearTimeout(hoverT.current); setHover(true); };
+  const leave = () => { clearTimeout(hoverT.current); hoverT.current = setTimeout(() => setHover(false), 130); };
+  const removeWaypoint = (px, py) => setEdges(eds => {
+    const next = eds.map(ed => {
+      if (ed.id !== id) return ed;
+      const r = (ed.data?.route || []).filter(q => !(Math.abs(q.x - px) < 1 && Math.abs(q.y - py) < 1));
+      const cleaned = cleanRoute(r);
+      return { ...ed, data:{ ...ed.data, route: cleaned.length ? cleaned : null } };
+    });
+    saveEdgePaths(next); return next;
+  });
+
   // publish this wire's API for the global hit-test (always the fresh version)
   const apiRef = useRef(null);
   apiRef.current = { drag:beginDrag, reset };
@@ -181,7 +211,32 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
       {/* invisible wide hit-area to grab and bend the wire (lives on the edge, not the pane → no clash with box-select) */}
       <path className="nodrag nopan" d={path} fill="none" stroke="transparent" strokeWidth={14}
         style={{ cursor:'move', pointerEvents:'stroke' }}
+        onPointerEnter={enter} onPointerLeave={leave}
         onPointerDown={(e) => { if (e.button === 0) beginDrag(e.clientX, e.clientY); }} />
+      {hover && (
+        <EdgeLabelRenderer>
+          {/* segment midpoints → drag to create a bend (hollow) */}
+          {full.slice(loI, hiI + 1).map((_, j) => {
+            const k = loI + j, mx = (full[k].x + full[k+1].x) / 2, my = (full[k].y + full[k+1].y) / 2;
+            return <div key={'m'+k} className="nodrag nopan" onPointerEnter={enter} onPointerLeave={leave}
+              onPointerDown={(e) => { e.stopPropagation(); if (e.button === 0) beginDrag(e.clientX, e.clientY); }}
+              title="Arrastra para crear un quiebre"
+              style={{ position:'absolute', pointerEvents:'all', cursor:'move',
+                transform:`translate(-50%,-50%) translate(${mx}px,${my}px)`,
+                width:9, height:9, borderRadius:99, background:'#0b0e13', border:'1.5px solid #8b949e' }} />;
+          })}
+          {/* existing waypoints → drag to move · double-click to delete (filled) */}
+          {(data?.route || []).map((p, i) => (
+            <div key={'w'+i} className="nodrag nopan" onPointerEnter={enter} onPointerLeave={leave}
+              onPointerDown={(e) => { e.stopPropagation(); if (e.button === 0) beginDrag(e.clientX, e.clientY); }}
+              onDoubleClick={(e) => { e.stopPropagation(); removeWaypoint(p.x, p.y); }}
+              title="Arrastra para mover · doble-click para borrar"
+              style={{ position:'absolute', pointerEvents:'all', cursor:'move',
+                transform:`translate(-50%,-50%) translate(${p.x}px,${p.y}px)`,
+                width:11, height:11, borderRadius:99, background:'#4aa3ff', border:'2px solid #0b0e13' }} />
+          ))}
+        </EdgeLabelRenderer>
+      )}
       {label && (
         <EdgeLabelRenderer>
           <div className="nodrag nopan" style={{
