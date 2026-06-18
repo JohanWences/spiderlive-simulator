@@ -4,7 +4,7 @@ import '@xyflow/react/dist/style.css';
 import { nodeTypes, edgeTypes, clearEdgePaths, edgeDragRegistry } from './nodes.jsx';
 import * as E from './engine.js';
 import { makeNodes, makeEdges, paintNodes, paintEdges, savePos, LS_POS } from './graph.js';
-import { IconPlay, IconStop, IconAlert, IconReset, IconFit } from './icons.jsx';
+import { IconPlay, IconPause } from './icons.jsx';
 import spiderLiveLogo from './assets/spiderlive-logo.png';
 
 // Default data for components dropped from the Library (kept renderable + crash-safe).
@@ -43,7 +43,7 @@ function Flow({ embedded }){
   const [docKey, setDocKey] = useState(null);
   const [docsOpen, setDocsOpen] = useState(true);
   const [sel, setSel] = useState(null);                          // selection box (screen coords)
-  const [live, setLive] = useState(false);                       // false = Edit (frozen) · true = animated Simulation
+  const [live, setLive] = useState(embedded);                    // embedded workspace runs live; false = frozen edit
   const hotRef = useRef(null);                                   // id of the highlighted wire (for the rAF loop)
   const hovT = useRef(0);
   const dropRef = useRef(0);
@@ -219,7 +219,7 @@ function Flow({ embedded }){
         const cr = sel.x1 < sel.x0;                               // crossing (green) vs window (blue)
         const L = Math.min(sel.x0,sel.x1), T = Math.min(sel.y0,sel.y1);
         const W = Math.abs(sel.x1-sel.x0), H = Math.abs(sel.y1-sel.y0);
-        return <div style={{ position:'absolute', left:L, top:T, width:W, height:H, zIndex:6, pointerEvents:'none',
+        return <div style={{ position:'fixed', left:L, top:T, width:W, height:H, zIndex:20, pointerEvents:'none',
           border:'1.5px '+(cr?'dashed #2ec27e':'solid #4aa3ff'), background:(cr?'#2ec27e22':'#4aa3ff1f') }} />;
       })()}
       {embedded && (
@@ -230,20 +230,14 @@ function Flow({ embedded }){
               background: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#8b949e' }} />
             <b style={{ color: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#e6edf3' }}>{hud.status}</b>
           </span>
-          <span style={{ ...chip, font:'600 11px system-ui' }}>Step <b style={{ color:'#e6edf3' }}>{hud.step}</b>/22</span>
-          <span style={{ ...chip, font:'600 11px system-ui' }}><b style={{ color:'#e6edf3' }}>{hud.mode}</b></span>
-          <button style={{ ...btnCss(live?'#e3b341':'#3a414c', live?'#0b0e13':'#e6edf3'), padding:'7px 12px' }} onClick={() => setLive(v => !v)} title="Edit / Simulation">{live ? 'Simulation' : 'Edit'}</button>
-          {[['Start', IconPlay, '#2ec27e', '#0b0e13', () => { setLive(true); E.start(sim.current); }],
-            ['Stop', IconStop, '#cdd9e5', '#0b0e13', () => E.stop(sim.current)],
-            ['Emergency stop', IconAlert, '#e5534b', '#fff', () => E.eStop(sim.current)],
-            ['Reset', IconReset, '#3a414c', '#e6edf3', () => E.reset(sim.current)],
-            ['Arrange', IconFit, '#3a414c', '#e6edf3', () => { localStorage.removeItem(LS_POS); clearEdgePaths(); setNodes(makeNodes(sim)); setEdges(makeEdges()); }]
-          ].map(([title, Ic, bg, fg, onClick]) => (
-            <button key={title} title={title} onClick={onClick}
-              style={{ ...btnCss(bg, fg), padding:'8px 9px', display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
-              <Ic size={14} />
-            </button>
-          ))}
+          <button title="Start" onClick={() => { setLive(true); E.start(sim.current); }}
+            style={{ ...btnCss('#2ec27e'), padding:'8px 13px', display:'inline-flex', alignItems:'center', gap:7 }}>
+            <IconPlay size={14} /> Start
+          </button>
+          <button title="Pause" onClick={() => E.stop(sim.current)}
+            style={{ ...btnCss('#cdd9e5'), padding:'8px 13px', display:'inline-flex', alignItems:'center', gap:7 }}>
+            <IconPause size={14} /> Pause
+          </button>
         </div>
       )}
       {!embedded && (

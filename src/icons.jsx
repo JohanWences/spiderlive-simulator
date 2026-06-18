@@ -16,6 +16,7 @@ export const IconComponents = (p) => <S {...p}><rect x="3" y="3" width="7" heigh
 export const IconCpu = (p) => <S {...p}><rect x="6" y="6" width="12" height="12" rx="1.5" /><rect x="9.5" y="9.5" width="5" height="5" rx="0.5" /><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2" /></S>;
 export const IconPlay = (p) => <F {...p}><path d="M7 5l12 7-12 7z" /></F>;
 export const IconStop = (p) => <F {...p}><rect x="6" y="6" width="12" height="12" rx="1.5" /></F>;
+export const IconPause = (p) => <F {...p}><rect x="6.5" y="5" width="4" height="14" rx="1" /><rect x="13.5" y="5" width="4" height="14" rx="1" /></F>;
 export const IconAlert = (p) => <S {...p}><path d="M12 3L2 20h20z" /><path d="M12 9v5" /><path d="M12 17.5h.01" /></S>;
 export const IconReset = (p) => <S {...p}><path d="M3 9a9 9 0 1 1-2 5" /><path d="M3 4v5h5" /></S>;
 export const IconFit = (p) => <S {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></S>;
