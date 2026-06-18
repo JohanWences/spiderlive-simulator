@@ -16,8 +16,18 @@ const LIB_H_KEY = 'spiderlive-lib-h';
 const LIBRARY_TREE = [
   { group: 'Controllers', items: [
     { label: 'SPI-DRY UTM-S9-MEC PLC', type: 'plc', data: { sim: {} },
-      desc: 'Programmable logic controller. 14 digital inputs / 10 relay outputs; runs the 22-step ladder program.',
-      info: ['14 DI · 10 DO · 2 AI', 'CPU 231043', 'AC / DC / RLY'] },
+      desc: 'Compact programmable logic controller — the brain of the installation. It reads the push buttons and the a0/a1 limit switches and drives the solenoid valves and the signal tower, running the verified 22-step program. The inputs and field sensors are powered from 24 V DC; the outputs are dry relay contacts that switch the field devices.',
+      info: [
+        'Type: AC / DC / Relay · CPU 231043',
+        'I/O supply: 24 V DC (range 20.4 – 28.8 V)',
+        'L+  —  +24 V DC input (positive, red)',
+        'M  —  0 V common / return (negative, blue)',
+        'Inputs: 14 × digital, 24 V DC (~4 mA)',
+        'Outputs: 10 × relay, ≤ 2 A (30 V DC / 250 V AC)',
+        'Output commons: 1L (Q0.0–Q0.3) · 2L (Q0.4–Q0.7)',
+        'Analog: 2 × 0 – 10 V DC · Comms: industrial Ethernet',
+        'Install per NOM-001-SEDE (grounding & overcurrent)',
+      ] },
   ] },
   { group: 'Actuators', items: [
     { label: 'Double-acting cylinder', type: 'module', data: { i: 0, pos: 0.45, on: false },
@@ -195,7 +205,7 @@ function InfoPanel({ el, onClose }) {
       <div style={{ height: 188, background: '#0b0e13', borderBottom: `1px solid ${T.border}` }}>
         <NodePreview type={el.type} data={el.data} />
       </div>
-      <div style={{ padding: '12px 13px' }}>
+      <div style={{ padding: '12px 13px', maxHeight: 'calc(100vh - 340px)', overflowY: 'auto' }}>
         <p style={{ margin: '0 0 10px', fontSize: 12.5, color: '#aeb7c2', lineHeight: 1.5 }}>{el.desc}</p>
         {el.info && el.info.map((line, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: T.muted, margin: '4px 0' }}>

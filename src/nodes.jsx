@@ -216,8 +216,13 @@ export function PLCNode({ data }){
         {/* brand and model */}
         <text x="116" y="82" fill="#eef1f5" fontFamily="Arial" fontWeight="bold" fontSize="20">SPI-DRY</text>
         <text x="116" y="100" fill="#aab0b8" fontSize="10">UTM-S9-MEC</text>
-        <text x={W-14} y="70" fill="#aab0b8" fontSize="11" textAnchor="end">CPU 231043</text>
-        <text x={W-14} y="85" fill="#9aa0a8" fontSize="10" textAnchor="end">AC/DC/RLY</text>
+        <text x={W-46} y="70" fill="#aab0b8" fontSize="11" textAnchor="end">CPU 231043</text>
+        <text x={W-46} y="85" fill="#9aa0a8" fontSize="10" textAnchor="end">AC/DC/RLY</text>
+        {/* power supply terminals (right side) */}
+        <text x={W-7} y="44" fill="#e5534b" fontSize="9" fontWeight="bold" textAnchor="end">L+</text>
+        <text x={W-7} y="54" fill="#e5534b" fontSize="6.5" textAnchor="end">+24V</text>
+        <text x={W-7} y="78" fill={AIR} fontSize="9" fontWeight="bold" textAnchor="end">M</text>
+        <text x={W-7} y="88" fill={AIR} fontSize="6.5" textAnchor="end">0V</text>
         {/* PROFINET */}
         <rect x="116" y={H-64} width="30" height="22" rx="3" fill="#2ec27e" />
         <text x="131" y={H-67} fill="#7a828c" fontSize="6.5" textAnchor="middle">PROFINET</text>

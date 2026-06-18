@@ -162,7 +162,9 @@ function Flow({ embedded }){
   const addNode = (type, position, label) => {
     const make = DROP_DATA[type]; if (!make) return;
     const id = `n_${type}_${++dropRef.current}`;
-    setNodes(nds => [...nds, { id, type, position, data: make(label) }]);
+    // _static → this is a placed component with its OWN state; the engine never repaints it,
+    // so two dropped PLCs don't share the simulated circuit's state.
+    setNodes(nds => [...nds, { id, type, position, data: { ...make(label), _static: true } }]);
   };
   // ---- Connect two ports by dragging a wire between handles ----
   const onConnect = useCallback((params) => {

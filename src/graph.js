@@ -75,6 +75,7 @@ export function makeEdges(persist = true){
 // ---------- Painting: push a sim state onto nodes/edges (only recreate what changed) ----------
 export function paintNodes(s, nds){
   return nds.map(n => {
+    if (n.data && n.data._static) return n;                     // placed components keep their own independent state
     if (n.type === 'module'){
       const i = n.data.i;
       if (typeof i !== 'number' || i < 0 || i > 5) return n;   // dropped/extra cylinders stay static (not wired to the engine)
