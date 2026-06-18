@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Handle, Position, BaseEdge, EdgeLabelRenderer, useReactFlow } from '@xyflow/react';
 import { LEG } from './engine.js';
+import { setInput, useActiveInputs } from './inputs.js';
 
 // Wire registry: each edge publishes { drag, reset } and the canvas decides which one to grab (global hit-test, robust to overlaps).
 export const edgeDragRegistry = new Map();
@@ -194,6 +195,7 @@ export const edgeTypes = { tag: TagEdge };
 export function PLCNode({ data }){
   const W = 520, H = 178;
   const sim = data.sim || { step:0, sysOn:false, emerg:false, q:[], di:[] };
+  const active = useActiveInputs();                              // inputs lit by a pressed bound element
   // DI INPUTS (top terminal strip): handle, address, color
   const di = [
     ['i_start','I0.0','#aab0b8'],['i_stop1','I0.1','#aab0b8'],['i_stop2','I0.2','#aab0b8'],['i_emerg','I0.3','#aab0b8'],
@@ -225,8 +227,11 @@ export function PLCNode({ data }){
         </g>)}
         <rect x={dx(14)-9} y="1" width={dx(15)-dx(14)+18} height="35" rx="3" fill="none" stroke="#4a5a6a" strokeDasharray="2 2" />
         <text x={(dx(14)+dx(15))/2} y="45" fill="#6e7681" fontSize="6.5" textAnchor="middle">SM 1221</text>
-        {/* DI status LEDs (green) */}
-        {di.map(([id,addr,c],k) => <circle key={'dl'+k} cx={dx(k)} cy="48" r="3" fill={sim.di&&sim.di[k]?'#39d98a':'#243027'} />)}
+        {/* DI status LEDs (green) — lit by the sim OR by a pressed bound element */}
+        {di.map(([id,addr,c],k) => {
+          const onLed = (sim.di && sim.di[k]) || !!active[PLC_ADDR[id]];
+          return <circle key={'dl'+k} cx={dx(k)} cy="48" r="3" fill={onLed?'#39d98a':'#243027'} />;
+        })}
         {/* RUN / STOP / ERROR */}
         <circle cx="24" cy="68" r="4" fill={sim.sysOn&&!sim.emerg?GRN:'#262b33'} /><text x="33" y="71" fill="#9aa0a8" fontSize="8">RUN</text>
         <circle cx="24" cy="84" r="4" fill={!sim.sysOn?AMB:'#262b33'} /><text x="33" y="87" fill="#9aa0a8" fontSize="8">STOP</text>
@@ -262,14 +267,20 @@ export function PLCNode({ data }){
 
 // ---------- Push button ----------
 export function ButtonNode({ data }){
+  const [pressed, setPressed] = useState(false);
+  const lit = data.on || pressed;
   return (
-    <div onClick={data.onClick} style={{ width:56, height:70, position:'relative', cursor:'pointer' }}>
+    <div onClick={data.onClick}
+         onPointerDown={() => { setPressed(true); setInput(data.io, true); }}
+         onPointerUp={() => { setPressed(false); setInput(data.io, false); }}
+         onPointerLeave={() => { setPressed(false); setInput(data.io, false); }}
+         style={{ width:56, height:70, position:'relative', cursor:'pointer' }}>
       {data.io && <IoBadge addr={data.io} />}
       <Handle type="source" position={Position.Bottom} id="out" style={hStyle(data.col)} />
       <svg width="56" height="70">
         <rect x="6" y="2" width="44" height="44" rx="7" fill="#0f1217" stroke="#000" />
-        <circle cx="28" cy="24" r="16" fill={data.on?data.col:'#1b2027'} stroke="rgba(0,0,0,.5)" />
-        {data.on && <circle cx="28" cy="24" r="20" fill="none" stroke={data.col} strokeWidth="2.5" />}
+        <circle cx="28" cy="24" r={pressed ? 12.5 : 16} fill={lit?data.col:'#1b2027'} stroke="rgba(0,0,0,.5)" style={{ transition:'r .07s ease' }} />
+        {lit && <circle cx="28" cy="24" r="20" fill="none" stroke={data.col} strokeWidth="2.5" />}
         <text x="28" y="60" fill="#aab0b8" fontSize="9" fontWeight="bold" textAnchor="middle">{data.lab}</text>
       </svg>
     </div>
@@ -278,13 +289,18 @@ export function ButtonNode({ data }){
 
 // ---------- Emergency-stop mushroom button ----------
 export function MushNode({ data }){
+  const [pressed, setPressed] = useState(false);
   return (
-    <div onClick={data.onClick} style={{ width:60, height:74, position:'relative', cursor:'pointer' }}>
+    <div onClick={data.onClick}
+         onPointerDown={() => { setPressed(true); setInput(data.io, true); }}
+         onPointerUp={() => { setPressed(false); setInput(data.io, false); }}
+         onPointerLeave={() => { setPressed(false); setInput(data.io, false); }}
+         style={{ width:60, height:74, position:'relative', cursor:'pointer' }}>
       {data.io && <IoBadge addr={data.io} />}
       <Handle type="source" position={Position.Bottom} id="out" style={hStyle('#e5534b')} />
       <svg width="60" height="74">
         <rect x="6" y="2" width="48" height="48" rx="7" fill="#0f1217" />
-        <circle cx="30" cy="26" r="20" fill={data.on?'#ff5247':'#7a1f1a'} stroke="rgba(0,0,0,.5)" strokeWidth="2" />
+        <circle cx="30" cy="26" r={pressed ? 16.5 : 20} fill={data.on?'#ff5247':'#7a1f1a'} stroke="rgba(0,0,0,.5)" strokeWidth="2" style={{ transition:'r .07s ease' }} />
         <circle cx="30" cy="26" r="10" fill="none" stroke="rgba(0,0,0,.4)" />
         <text x="30" y="66" fill="#aab0b8" fontSize="9" fontWeight="bold" textAnchor="middle">EMERG</text>
       </svg>
