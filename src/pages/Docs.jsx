@@ -72,6 +72,51 @@ const DOCS = [
     ],
   },
   {
+    group: 'Connect a real PLC',
+    items: [
+      {
+        id: 'requirements', title: 'What you need',
+        blocks: [
+          { t: 'p', x: 'The simulator on its own needs nothing — just open the web app and the built-in 22-step demo runs in your browser. To drive the plant with YOUR own PLC program, SpiderLive connects to OpenPLC over Modbus through a small local bridge. For that "connected" mode you need:' },
+          { t: 'ul', x: [
+            'Node.js 18+ — to run the bridge (download from nodejs.org).',
+            'OpenPLC Runtime — the server app that runs your program and speaks Modbus TCP (openplcproject.com). Note: the Editor\'s built-in "OpenPLC Simulator" is a closed test loop and cannot connect to external I/O — you need the Runtime.',
+            'OpenPLC Editor — to write your ladder / Structured Text program (skip if you already have one).',
+          ] },
+          { t: 'note', x: 'Standalone mode (the built-in demo) requires no installs at all. The tools above are only for connecting your own OpenPLC program.' },
+        ],
+      },
+      {
+        id: 'the-bridge', title: 'The bridge',
+        blocks: [
+          { t: 'p', x: 'The SpiderLive Bridge links OpenPLC (Modbus TCP) to the SpiderLive browser (WebSocket). No clone needed — run it with npx:' },
+          { t: 'code', x: 'npx spiderlive-bridge' },
+          { t: 'p', x: 'It starts a Modbus TCP slave on port 502 (OpenPLC connects here) and a WebSocket server on port 8080 (the browser connects here). Leave it running while you work.' },
+          { t: 'h2', x: 'I/O map' },
+          { t: 'ul', x: [
+            'Coils 0–5 → cylinder solenoids (Q0.0–Q0.5); coils 6–7 → signal tower (Q0.6–Q0.7).',
+            'Discrete inputs 0–3 → START / STOP 1 / STOP 2 / EMERGENCY (I0.0–I0.3).',
+            'Discrete inputs 4–9 → a1 sensors (extended); 10–15 → a0 sensors (retracted).',
+          ] },
+        ],
+      },
+      {
+        id: 'connect-openplc', title: 'Connecting OpenPLC',
+        blocks: [
+          { t: 'p', x: 'First, give each program variable a physical address in its Location field — for example Inicio at %IX0.0 (a digital input) and Salida at %QX0.0 (a digital output). A variable with no Location is internal only and nothing outside can read or write it.' },
+          { t: 'p', x: 'Then, in OpenPLC Runtime, add a Slave Device pointing at the bridge:' },
+          { t: 'ul', x: [
+            'Protocol Modbus TCP · IP 127.0.0.1 · Port 502 · Slave ID 1',
+            'Discrete Inputs: start 0, size 16 → mapped to %I (buttons + sensors).',
+            'Coils: start 0, size 8 → mapped to %Q (solenoids + tower).',
+          ] },
+          { t: 'p', x: 'Run your program. Every scan OpenPLC polls the bridge: it reads your buttons/sensors into %I and writes your outputs from %Q — and SpiderLive reacts in real time.' },
+          { t: 'note', x: 'Binding canvas elements to specific Modbus addresses from inside SpiderLive is on the way; for now the bridge uses the fixed map above.' },
+        ],
+      },
+    ],
+  },
+  {
     group: 'Reference',
     items: [
       {
