@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Handle, Position, BaseEdge, EdgeLabelRenderer, useReactFlow } from '@xyflow/react';
 import { LEG } from './engine.js';
-import { setInput, useActiveInputs, useActiveOutputs } from './inputs.js';
+import { setInput, useActiveInputs, useActiveOutputs, useRunning } from './inputs.js';
+import { pkey } from './files.js';
 
 // Wire registry: each edge publishes { drag, reset } and the canvas decides which one to grab (global hit-test, robust to overlaps).
 export const edgeDragRegistry = new Map();
@@ -17,15 +18,15 @@ function IoBadge({ addr }){
     font:'700 9px system-ui', padding:'1px 5px', borderRadius:5, border:'1px solid #0b0e13', whiteSpace:'nowrap' }}>{addr}</div>;
 }
 
-// ---------- Wire path persistence (localStorage) ----------
+// ---------- Wire path persistence (localStorage, per active program) ----------
 const LS_EDGES = 'spiderlive-edges';
 export const saveEdgePaths = (edges) => {
   const m = {};
   edges.forEach(e => { if (e.data && e.data.route && e.data.route.length) m[e.id] = e.data.route; });
-  try { localStorage.setItem(LS_EDGES, JSON.stringify(m)); } catch {}
+  try { localStorage.setItem(pkey(LS_EDGES), JSON.stringify(m)); } catch {}
 };
-export const loadEdgePaths  = () => { try { return JSON.parse(localStorage.getItem(LS_EDGES)) || {}; } catch { return {}; } };
-export const clearEdgePaths = () => { try { localStorage.removeItem(LS_EDGES); } catch {} };
+export const loadEdgePaths  = () => { try { return JSON.parse(localStorage.getItem(pkey(LS_EDGES))) || {}; } catch { return {}; } };
+export const clearEdgePaths = () => { try { localStorage.removeItem(pkey(LS_EDGES)); } catch {} };
 
 // PLC terminal (handle id) → OpenPLC address. Wiring an element to a terminal
 // gives that element the terminal's address (auto-bind).
@@ -106,7 +107,7 @@ function insertForDrag(route, k, vert, S, T, sp, tp){
 
 // ---------- Edge: label anchored to the TERMINAL + draggable break point ----------
 // Hover over the wire → a grip appears; drag it to move the wire; double-click = back to automatic.
-export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data, label, markerEnd }){
+export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data, label, markerEnd, selected }){
   const { screenToFlowPosition, setEdges } = useReactFlow();
   const S = { x:sourceX, y:sourceY }, T = { x:targetX, y:targetY };
 
@@ -134,6 +135,7 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
     const { work, iStart, iEnd } = insertForDrag(route, k, vert, S, T, sourcePosition, targetPosition);
     let moved = false;
     const apply = (e) => {
+      if (!moved && Math.hypot(e.clientX - cx, e.clientY - cy) < 5) return;   // ignore micro-drags → no accidental kinks
       moved = true;
       const g = screenToFlowPosition({ x:e.clientX, y:e.clientY });
       const r = work.map(p => ({ ...p }));
@@ -171,10 +173,15 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
   else if (pos === Position.Left)   ox = -14 - tier;
   else if (pos === Position.Right)  ox = 14 + tier;
   const col = (style && style.stroke) || '#cdd9e5';
+  const drawStyle = selected ? { ...style, stroke:'#e6edf3', strokeWidth: Math.max(3, (style?.strokeWidth || 2) + 1) } : style;
 
   return (
     <>
-      <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
+      <BaseEdge id={id} path={path} style={drawStyle} markerEnd={markerEnd} />
+      {/* invisible wide hit-area to grab and bend the wire (lives on the edge, not the pane → no clash with box-select) */}
+      <path className="nodrag nopan" d={path} fill="none" stroke="transparent" strokeWidth={14}
+        style={{ cursor:'move', pointerEvents:'stroke' }}
+        onPointerDown={(e) => { if (e.button === 0) beginDrag(e.clientX, e.clientY); }} />
       {label && (
         <EdgeLabelRenderer>
           <div className="nodrag nopan" style={{
@@ -272,21 +279,23 @@ export function PLCNode({ data }){
 // ---------- Push button ----------
 export function ButtonNode({ data }){
   const [pressed, setPressed] = useState(false);
+  const running = useRunning();                                  // Stopped = edit mode: button is inert (drag freely)
   const lit = data.on || pressed;
   return (
-    <div onClick={data.onClick}
-         onPointerDown={() => { setPressed(true); setInput(data.io, true); }}
-         onPointerUp={() => { setPressed(false); setInput(data.io, false); }}
-         onPointerLeave={() => { setPressed(false); setInput(data.io, false); }}
-         style={{ width:56, height:70, position:'relative', cursor:'pointer' }}>
+    <div onClick={running ? data.onClick : undefined}
+         onPointerDown={() => { if (!running) return; setPressed(true); setInput(data.io, true); }}
+         onPointerUp={() => { if (!running) return; setPressed(false); setInput(data.io, false); }}
+         onPointerLeave={() => { if (!running) return; setPressed(false); setInput(data.io, false); }}
+         style={{ width:56, height:70, position:'relative', cursor: running ? 'pointer' : 'move' }}>
       {data.io && <IoBadge addr={data.io} />}
       <Handle type="source" position={Position.Bottom} id="out" style={hStyle(data.col)} />
-      <svg width="56" height="70">
+      <svg width="56" height="48">
         <rect x="6" y="2" width="44" height="44" rx="7" fill="#0f1217" stroke="#000" />
         <circle cx="28" cy="24" r={pressed ? 12.5 : 16} fill={lit?data.col:'#1b2027'} stroke="rgba(0,0,0,.5)" style={{ transition:'r .07s ease' }} />
         {lit && <circle cx="28" cy="24" r="20" fill="none" stroke={data.col} strokeWidth="2.5" />}
-        <text x="28" y="60" fill="#aab0b8" fontSize="9" fontWeight="bold" textAnchor="middle">{data.lab}</text>
       </svg>
+      <div style={{ position:'absolute', top:49, left:'50%', transform:'translateX(-50%)', whiteSpace:'nowrap',
+                    fontSize:9, fontWeight:700, lineHeight:1, color:'#aab0b8', pointerEvents:'none' }}>{data.lab}</div>
     </div>
   );
 }
@@ -294,12 +303,13 @@ export function ButtonNode({ data }){
 // ---------- Emergency-stop mushroom button ----------
 export function MushNode({ data }){
   const [pressed, setPressed] = useState(false);
+  const running = useRunning();                                  // Stopped = edit mode: inert (drag freely)
   return (
-    <div onClick={data.onClick}
-         onPointerDown={() => { setPressed(true); setInput(data.io, true); }}
-         onPointerUp={() => { setPressed(false); setInput(data.io, false); }}
-         onPointerLeave={() => { setPressed(false); setInput(data.io, false); }}
-         style={{ width:60, height:74, position:'relative', cursor:'pointer' }}>
+    <div onClick={running ? data.onClick : undefined}
+         onPointerDown={() => { if (!running) return; setPressed(true); setInput(data.io, true); }}
+         onPointerUp={() => { if (!running) return; setPressed(false); setInput(data.io, false); }}
+         onPointerLeave={() => { if (!running) return; setPressed(false); setInput(data.io, false); }}
+         style={{ width:60, height:74, position:'relative', cursor: running ? 'pointer' : 'move' }}>
       {data.io && <IoBadge addr={data.io} />}
       <Handle type="source" position={Position.Bottom} id="out" style={hStyle('#e5534b')} />
       <svg width="60" height="74">
@@ -462,15 +472,22 @@ export function Supply24Node(){
   );
 }
 
-// ---------- Signal tower ----------
+// ---------- Signal tower (3 lamps: red / amber / green) ----------
 export function TowerNode({ data }){
   const sim = data.sim || {};
-  const seg = [['#e5534b', sim.emerg], ['#e3b341', false], [GRN, sim.sysOn && !sim.emerg]];
+  const L = data.lamps;                                          // continuity-solved state (user-built circuits)
+  // [colour, lit] for each lamp, top → bottom. The handle ids line up with these.
+  const seg = [
+    ['#e5534b', L ? L.in_emg   : sim.emerg],
+    ['#e3b341', L ? L.in_amber : sim.amber],
+    [GRN,       L ? L.in_run   : (sim.sysOn && !sim.emerg)],
+  ];
   return (
-    <div title="Signal tower (lamps driven by Q outputs)" style={{ width:46, height:100, position:'relative' }}>
-      <Handle type="target" position={Position.Right} id="in_run" title="H_RUN ← Q0.6 (signal)" style={{ ...hStyle(GRN), top: 30 }} />
-      <Handle type="target" position={Position.Right} id="in_emg" title="H_EMG ← Q0.7 (signal)" style={{ ...hStyle(GRN), top: 56 }} />
-      <Handle type="source" position={Position.Bottom} id="com" title="Common 0 V (return to M)" style={{ ...hStyle('#539bf5'), left: 23 }} />
+    <div title="Signal tower — 3 lamps driven by Q outputs" style={{ width:46, height:100, position:'relative' }}>
+      <Handle type="target" position={Position.Right} id="in_emg"   title="Red lamp ← Q (emergency / fault)" style={{ ...hStyle('#e5534b'), top: 18 }} />
+      <Handle type="target" position={Position.Right} id="in_amber" title="Amber lamp ← Q (warning)"        style={{ ...hStyle('#e3b341'), top: 44 }} />
+      <Handle type="target" position={Position.Right} id="in_run"   title="Green lamp ← Q (running)"        style={{ ...hStyle(GRN), top: 70 }} />
+      <Handle type="source" position={Position.Bottom} id="com" title="Common 0 V — tie to M (PLC or 24 V source)" style={{ ...hStyle('#539bf5'), left: 23 }} />
       <svg width="46" height="100">
         {seg.map((sgmt, k) => <rect key={k} x="8" y={6+k*26} width="30" height="24" rx="5"
           fill={sgmt[1] ? sgmt[0] : '#23262c'} stroke="rgba(0,0,0,.35)" />)}

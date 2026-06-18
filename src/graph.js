@@ -3,21 +3,37 @@
 // landing-page live preview show the exact same circuit.
 import * as E from './engine.js';
 import { loadEdgePaths } from './nodes.jsx';
+import { pkey } from './files.js';
 
 export const MODX = [40, 380, 720, 1060, 1400, 1740];
 
-// ---------- Node position persistence (localStorage) ----------
+// ---------- Node position persistence (localStorage, per active program) ----------
 export const LS_POS = 'spiderlive-pos';
-export const loadPos = () => { try { return JSON.parse(localStorage.getItem(LS_POS)) || {}; } catch { return {}; } };
+export const loadPos = () => { try { return JSON.parse(localStorage.getItem(pkey(LS_POS))) || {}; } catch { return {}; } };
 export const savePos = (nodes) => {
   const m = {}; nodes.forEach(n => { m[n.id] = n.position; });
-  try { localStorage.setItem(LS_POS, JSON.stringify(m)); } catch {}
+  try { localStorage.setItem(pkey(LS_POS), JSON.stringify(m)); } catch {}
 };
 
 // ---- I/O address binding per node (e.g. a button → %IX0.0, an output → %QX0.0) ----
 export const LS_IO = 'spiderlive-io';
-export const loadIO = () => { try { return JSON.parse(localStorage.getItem(LS_IO)) || {}; } catch { return {}; } };
-export const saveIO = (map) => { try { localStorage.setItem(LS_IO, JSON.stringify(map)); } catch {} };
+export const loadIO = () => { try { return JSON.parse(localStorage.getItem(pkey(LS_IO))) || {}; } catch { return {}; } };
+export const saveIO = (map) => { try { localStorage.setItem(pkey(LS_IO), JSON.stringify(map)); } catch {} };
+
+// ---- Custom node names (so you can rename "PUSH B" → "Cycle start", etc.) ----
+export const LS_LAB = 'spiderlive-lab';
+export const loadLabels = () => { try { return JSON.parse(localStorage.getItem(pkey(LS_LAB))) || {}; } catch { return {}; } };
+export const saveLabels = (map) => { try { localStorage.setItem(pkey(LS_LAB), JSON.stringify(map)); } catch {} };
+
+// ---- Full canvas snapshot for blank (user-built) files: placed nodes + wires ----
+export const LS_CANVAS = 'spiderlive-canvas';
+export const loadCanvas = () => { try { return JSON.parse(localStorage.getItem(pkey(LS_CANVAS))) || null; } catch { return null; } };
+export const saveCanvas = (nodes, edges) => {
+  // JSON.stringify drops function-valued data (onClick/lit) — rebuilt from DROP_DATA on load.
+  const N = nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: n.data }));
+  const Ed = edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle }));
+  try { localStorage.setItem(pkey(LS_CANVAS), JSON.stringify({ nodes: N, edges: Ed })); } catch {}
+};
 
 const arrEq = (a, b) => { if (!a || !b || a.length !== b.length) return false; for (let i=0;i<a.length;i++) if (a[i] !== b[i]) return false; return true; };
 
@@ -39,11 +55,13 @@ export function makeNodes(sim, persist = true){
   for (let i=0;i<6;i++)
     n.push({ id:'m'+i, type:'module', position:{ x:MODX[i], y:300 }, data:{ i, pos:0, on:false } });
   n.push({ id:'sup', type:'supply', position:{ x:430, y:540 }, data:{} });
-  if (persist){                                                   // restore the user's saved layout + I/O bindings
+  if (persist){                                                   // restore the user's saved layout + I/O bindings + names
     const saved = loadPos();
     n.forEach(nd => { if (saved[nd.id]) nd.position = saved[nd.id]; });
     const io = loadIO();
     n.forEach(nd => { if (io[nd.id]) nd.data = { ...nd.data, io: io[nd.id] }; });
+    const lab = loadLabels();
+    n.forEach(nd => { if (lab[nd.id]) nd.data = { ...nd.data, lab: lab[nd.id] }; });
   }
   return n;
 }

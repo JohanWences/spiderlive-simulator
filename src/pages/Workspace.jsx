@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { navigate } from '../router.jsx';
 import { T } from '../theme.js';
 import App from '../App.jsx';
 import NodePreview from './NodePreview.jsx';
+import BridgePanel from './BridgePanel.jsx';
+import IoMapping from './IoMapping.jsx';
+import { SYMBOLS } from '../symbols.jsx';
 import logo from '../assets/spiderlive-logo-blue.png';
+import { loadFiles, saveFiles, newFileId, dropProgramState } from '../files.js';
+import { startBridge } from '../bridge.js';
 import {
   IconSearch, IconPanel, IconComponents, IconCpu, IconPlay, IconFolder, IconFile,
   IconSettings, IconLink, IconChevron, IconPlus, IconX,
@@ -38,12 +43,12 @@ const LIBRARY_TREE = [
       info: ['5 ports · 2 positions', 'Solenoid 14 / spring 12'] },
   ] },
   { group: 'Inputs', items: [
-    { label: 'Push button (NO)', type: 'button', data: { col: '#2ec27e', on: true, lab: 'START' },
-      desc: 'Normally-open momentary push button, wired to a PLC digital input.', info: ['NO contact', 'Momentary'] },
-    { label: 'Push button (NC)', type: 'button', data: { col: '#d83a34', on: false, lab: 'STOP' },
-      desc: 'Normally-closed momentary push button, wired to a PLC digital input.', info: ['NC contact', 'Momentary'] },
-    { label: 'Emergency stop', type: 'mush', data: { on: false },
-      desc: 'Latching mushroom-head emergency stop (NC). Stops the installation; all legs come down.', info: ['Latching', 'NC contact'] },
+    { label: 'Push button (NO)', type: 'button', sym: 'no', data: { col: '#2ec27e', on: true, lab: 'START' },
+      desc: 'Normally-open momentary push button, wired to a PLC digital input.', info: ['NO contact', 'Momentary', 'Terminals 13 / 14 (EN 50005)'] },
+    { label: 'Push button (NC)', type: 'button', sym: 'nc', data: { col: '#d83a34', on: false, lab: 'STOP' },
+      desc: 'Normally-closed momentary push button, wired to a PLC digital input.', info: ['NC contact', 'Momentary', 'Terminals 11 / 12 (EN 50005)'] },
+    { label: 'Emergency stop', type: 'mush', sym: 'estop', data: { on: false },
+      desc: 'Latching mushroom-head emergency stop (NC). Stops the installation; all legs come down.', info: ['Latching', 'NC contact', 'Terminals 21 / 22 (EN 50005)'] },
   ] },
   { group: 'Pneumatic supply', items: [
     { label: 'Pneumatic supply (FRL)', type: 'supply', data: {},
@@ -59,11 +64,13 @@ const LIBRARY_TREE = [
   ] },
 ];
 
+// The Simulations folder is rendered dynamically (FilesSection); these are the rest.
+// Nodes with `sel` are clickable and open that view in the main area.
 const TREE = [
-  { label: 'Canvas', Icon: IconFolder, children: [{ label: 'main', Icon: IconFile, active: true }] },
-  { label: 'Components', Icon: IconComponents },
-  { label: 'Configuration', Icon: IconSettings },
-  { label: 'Device', Icon: IconCpu, children: [{ label: 'Configuration', Icon: IconSettings }, { label: 'I/O Mapping', Icon: IconLink }] },
+  { label: 'Device', Icon: IconCpu, children: [
+    { label: 'I/O Mapping', Icon: IconLink, sel: 'iomap' },
+    { label: 'OpenPLC Bridge', Icon: IconLink, sel: 'bridge' },
+  ] },
 ];
 
 const RAIL = [IconPanel, IconSearch, IconComponents, IconCpu, IconPlay];
@@ -130,24 +137,80 @@ function MenuBar({ onTogglePanel, onToggleConsole }) {
   );
 }
 
-function TreeRow({ node, depth = 0 }) {
+function TreeRow({ node, depth = 0, onSelect, activeKey }) {
   const [open, setOpen] = useState(true);
   const has = node.children && node.children.length;
   const Icon = node.Icon;
+  const active = node.active || (node.sel && node.sel === activeKey);
   return (
     <>
-      <button onClick={() => has && setOpen(o => !o)}
+      <button onClick={() => (has ? setOpen(o => !o) : (node.sel && onSelect && onSelect(node.sel)))}
         style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', textAlign: 'left',
-                 background: node.active ? T.panel2 : 'transparent', border: 'none', cursor: 'pointer',
+                 background: active ? T.panel2 : 'transparent', border: 'none', cursor: 'pointer',
                  padding: `5px 8px 5px ${8 + depth * 14}px`, borderRadius: 7, fontSize: 13.5,
-                 color: node.active ? T.text : T.muted }}>
+                 color: active ? T.text : T.muted }}>
         <span style={{ width: 10, display: 'inline-flex', color: T.faint, transform: has && open ? 'rotate(90deg)' : 'none', transition: 'transform .1s' }}>
           {has ? <IconChevron size={11} /> : null}
         </span>
         <Icon size={15} />{node.label}
       </button>
-      {has && open && node.children.map((c, i) => <TreeRow key={i} node={c} depth={depth + 1} />)}
+      {has && open && node.children.map((c, i) => <TreeRow key={i} node={c} depth={depth + 1} onSelect={onSelect} activeKey={activeKey} />)}
     </>
+  );
+}
+
+// Canvas folder: the project's files, with new-file (+), double-click rename and delete.
+function FilesSection({ files, activeId, editingId, draft, setDraft, onOpen, onNew, onStartRename, onCommitRename, onCancelRename, onDelete }) {
+  const [open, setOpen] = useState(true);
+  const [hdr, setHdr] = useState(false);
+  const [hoverId, setHoverId] = useState(null);
+  return (
+    <div>
+      <div onMouseEnter={() => setHdr(true)} onMouseLeave={() => setHdr(false)}
+        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, color: T.muted, fontSize: 13.5 }}>
+        <button onClick={() => setOpen(o => !o)}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 13.5, padding: 0 }}>
+          <span style={{ width: 10, display: 'inline-flex', color: T.faint, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .1s' }}><IconChevron size={11} /></span>
+          <span style={{ color: T.blueLt }}><IconFolder size={15} /></span> Simulations
+        </button>
+        <button onClick={onNew} title="New file"
+          style={{ opacity: hdr ? 1 : 0.4, transition: 'opacity .1s', background: 'none', border: 'none', color: T.muted, cursor: 'pointer', display: 'flex', padding: 2, borderRadius: 5 }}>
+          <IconPlus size={14} />
+        </button>
+      </div>
+      {open && files.map(f => {
+        const on = activeId === f.id;
+        const editing = editingId === f.id;
+        return (
+          <div key={f.id}
+            onMouseEnter={() => setHoverId(f.id)} onMouseLeave={() => setHoverId(null)}
+            onClick={() => !editing && onOpen(f.id)} onDoubleClick={() => onStartRename(f)}
+            title={editing ? '' : 'Click to open · double-click to rename'}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px 5px 22px', borderRadius: 7, cursor: 'pointer',
+                     background: on ? T.panel2 : 'transparent', color: on ? T.text : T.muted, fontSize: 13.5 }}>
+            <span style={{ color: T.faint, flexShrink: 0, display: 'flex' }}><IconFile size={14} /></span>
+            {editing ? (
+              <input autoFocus value={draft}
+                onChange={e => setDraft(e.target.value)} onClick={e => e.stopPropagation()}
+                onBlur={() => onCommitRename(f.id)}
+                onKeyDown={e => { if (e.key === 'Enter') onCommitRename(f.id); else if (e.key === 'Escape') onCancelRename(f.id); }}
+                placeholder="file name"
+                style={{ flex: 1, minWidth: 0, background: '#0b0e13', color: T.text, border: `1px solid ${T.blue}`, borderRadius: 5, padding: '2px 6px', font: '13px system-ui', outline: 'none' }} />
+            ) : (
+              <>
+                <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name || 'untitled'}</span>
+                {f.id !== 'main' && hoverId === f.id && (
+                  <button onClick={e => { e.stopPropagation(); onDelete(f.id); }} title="Delete file"
+                    style={{ background: 'none', border: 'none', color: T.faint, cursor: 'pointer', display: 'flex', padding: 1, flexShrink: 0 }}>
+                    <IconX size={13} />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -194,6 +257,9 @@ function LibFolder({ group, items, q, selected, onSelect }) {
 }
 
 function InfoPanel({ el, onClose }) {
+  const Sym = el.sym ? SYMBOLS[el.sym] : null;
+  const cap = { position: 'absolute', left: 8, bottom: 6, fontSize: 9.5, letterSpacing: 0.6,
+                fontWeight: 700, color: T.faint, pointerEvents: 'none' };
   return (
     <div style={{ position: 'absolute', top: 12, right: 12, width: 290, zIndex: 20, userSelect: 'none',
                   background: '#0d1117f5', border: `1px solid ${T.border2}`, borderRadius: 13, overflow: 'hidden',
@@ -202,8 +268,18 @@ function InfoPanel({ el, onClose }) {
         <span style={{ fontWeight: 700, fontSize: 13.5, color: T.text }}>{el.label}</span>
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', display: 'flex' }}><IconX size={16} /></button>
       </div>
-      <div style={{ height: 188, background: '#0b0e13', borderBottom: `1px solid ${T.border}` }}>
-        <NodePreview type={el.type} data={el.data} />
+      <div style={{ height: 188, display: 'flex', background: '#0b0e13', borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+          <NodePreview key={el.label} type={el.type} data={el.data} />
+          {Sym && <span style={cap}>PHYSICAL</span>}
+        </div>
+        {Sym && (
+          <div style={{ flex: 1, minWidth: 0, position: 'relative', borderLeft: `1px solid ${T.border}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px 14px' }}>
+            <Sym />
+            <span style={cap}>IEC 60617</span>
+          </div>
+        )}
       </div>
       <div style={{ padding: '12px 13px', maxHeight: 'calc(100vh - 340px)', overflowY: 'auto' }}>
         <p style={{ margin: '0 0 10px', fontSize: 12.5, color: '#aeb7c2', lineHeight: 1.5 }}>{el.desc}</p>
@@ -221,7 +297,11 @@ function InfoPanel({ el, onClose }) {
 export default function Workspace() {
   const [panel, setPanel] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(true);
-  const [tab, setTab] = useState('main');
+  const [files, setFiles] = useState(loadFiles);
+  const [openIds, setOpenIds] = useState([files[0]?.id || 'main']);
+  const [active, setActive] = useState(files[0]?.id || 'main');   // a file id, or 'config'
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState('');
   const [libQ, setLibQ] = useState('');
   const [selEl, setSelEl] = useState(null);
   const [libH, setLibH] = useState(() => {
@@ -232,6 +312,56 @@ export default function Workspace() {
     { t: 'ready', m: 'SpiderLive workspace loaded' },
     { t: 'info', m: 'PLC SPI-DRY UTM-S9-MEC · 22-step program ready' },
   ]);
+
+  // ---- File actions (persisted to localStorage via saveFiles) ----
+  const fileOf = (id) => files.find(f => f.id === id);
+  const activeFile = fileOf(active);
+  const commitFiles = (next) => { setFiles(next); saveFiles(next); };
+
+  const openFile = (id) => { setOpenIds(o => (o.includes(id) ? o : [...o, id])); setActive(id); };
+
+  const newFile = () => {
+    const id = newFileId();
+    commitFiles([...files, { id, name: '', preset: 'blank' }]);
+    setOpenIds(o => [...o, id]);
+    setActive(id);
+    setEditingId(id); setDraft('');                              // open inline rename right away (VSCode-style)
+  };
+
+  const startRename = (f) => { setEditingId(f.id); setDraft(f.name); };
+  const commitRename = (id) => {
+    const name = (draft.trim() || 'untitled').slice(0, 40);
+    setFiles(prev => {
+      if (!prev.some(f => f.id === id)) return prev;             // discarded meanwhile (Escape) → ignore the blur
+      const next = prev.map(f => (f.id === id ? { ...f, name } : f));
+      saveFiles(next);
+      return next;
+    });
+    setEditingId(null);
+  };
+  const deleteFile = (id) => {
+    if (id === 'main') return;                                   // the spider example stays
+    const next = files.filter(f => f.id !== id);
+    commitFiles(next);
+    dropProgramState(id);                                        // wipe its saved canvas
+    const rest = openIds.filter(x => x !== id);
+    setOpenIds(rest.length ? rest : [next[0]?.id || 'main']);
+    if (active === id) setActive(rest[rest.length - 1] || next[0]?.id || 'main');
+    setEditingId(e => (e === id ? null : e));
+  };
+  const cancelRename = (id) => {
+    const f = fileOf(id);
+    if (f && !f.name) deleteFile(id);                            // brand-new, never named → discard
+    setEditingId(null);
+  };
+  const closeTab = (id) => {
+    const rest = openIds.filter(x => x !== id);
+    if (!rest.length) { setOpenIds(['main']); setActive('main'); return; }
+    setOpenIds(rest);
+    if (active === id) setActive(rest[rest.length - 1]);
+  };
+
+  useEffect(() => { startBridge(); }, []);                        // keep the bridge link alive on every tab
 
   const startLibResize = (e) => {
     e.preventDefault();
@@ -288,7 +418,11 @@ export default function Workspace() {
 
             {/* project tree (flex) */}
             <div style={{ flex: 1, overflow: 'auto', padding: '8px 6px', minHeight: 60 }}>
-              {TREE.map((n, i) => <TreeRow key={i} node={n} />)}
+              <FilesSection files={files} activeId={active}
+                editingId={editingId} draft={draft} setDraft={setDraft}
+                onOpen={openFile} onNew={newFile} onStartRename={startRename}
+                onCommitRename={commitRename} onCancelRename={cancelRename} onDelete={deleteFile} />
+              {TREE.map((n, i) => <TreeRow key={i} node={n} onSelect={(sel) => setActive(sel)} activeKey={active} />)}
             </div>
 
             {/* resize handle */}
@@ -321,32 +455,39 @@ export default function Workspace() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {/* tabs + breadcrumb */}
           <div style={{ flexShrink: 0, borderBottom: `1px solid ${T.border}`, background: T.panel, userSelect: 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'stretch' }}>
-              {[['main', IconFile], ['Configuration', IconSettings]].map(([name, Ic]) => (
-                <button key={name} onClick={() => setTab(name)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 16px', border: 'none', cursor: 'pointer',
-                           background: tab === name ? T.bg : 'transparent', color: tab === name ? T.text : T.muted,
-                           borderBottom: `2px solid ${tab === name ? T.blue : 'transparent'}`, fontSize: 13.5, fontWeight: 600 }}>
-                  <Ic size={15} />{name}
-                </button>
-              ))}
+            <div style={{ display: 'flex', alignItems: 'stretch', overflowX: 'auto' }}>
+              {openIds.map(id => {
+                const f = fileOf(id); if (!f) return null;
+                const on = active === id;
+                return (
+                  <div key={id} onClick={() => setActive(id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 10px 10px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
+                             background: on ? T.bg : 'transparent', color: on ? T.text : T.muted,
+                             borderBottom: `2px solid ${on ? T.blue : 'transparent'}`, borderRight: `1px solid ${T.border}`, fontSize: 13.5, fontWeight: 600 }}>
+                    <IconFile size={15} />{f.name || 'untitled'}
+                    <button onClick={e => { e.stopPropagation(); closeTab(id); }} title="Close"
+                      style={{ background: 'none', border: 'none', color: T.faint, cursor: 'pointer', display: 'flex', padding: 1, marginLeft: 2, borderRadius: 4 }}>
+                      <IconX size={13} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 16px', color: T.muted, fontSize: 12.5, borderTop: `1px solid ${T.border}` }}>
               <span>SpiderLive Project</span><span style={{ color: T.faint }}>›</span>
-              <span>Canvas</span><span style={{ color: T.faint }}>›</span>
-              <span style={{ color: T.text }}>main</span>
+              <span>{active === 'bridge' || active === 'iomap' ? 'Device' : 'Simulations'}</span><span style={{ color: T.faint }}>›</span>
+              <span style={{ color: T.text }}>{active === 'bridge' ? 'OpenPLC Bridge' : active === 'iomap' ? 'I/O Mapping' : (activeFile?.name || 'untitled')}</span>
             </div>
           </div>
 
-          {/* canvas / configuration */}
+          {/* canvas / bridge / i-o mapping */}
           <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-            {tab === 'main'
-              ? <App embedded />
-              : <div style={{ padding: 40, color: T.muted }}>
-                  <h2 style={{ color: T.text, fontWeight: 700 }}>Configuration</h2>
-                  <p>Device, I/O mapping and program settings will live here.</p>
-                </div>}
-            {tab === 'main' && selEl && <InfoPanel el={selEl} onClose={() => setSelEl(null)} />}
+            {active === 'bridge'
+              ? <BridgePanel />
+              : active === 'iomap'
+              ? <IoMapping />
+              : <App key={active} embedded fileId={active} blank={activeFile?.preset !== 'spider'} />}
+            {active !== 'bridge' && active !== 'iomap' && selEl && <InfoPanel el={selEl} onClose={() => setSelEl(null)} />}
           </div>
 
           {/* console */}
