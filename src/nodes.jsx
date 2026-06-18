@@ -26,6 +26,15 @@ export const saveEdgePaths = (edges) => {
 export const loadEdgePaths  = () => { try { return JSON.parse(localStorage.getItem(LS_EDGES)) || {}; } catch { return {}; } };
 export const clearEdgePaths = () => { try { localStorage.removeItem(LS_EDGES); } catch {} };
 
+// PLC terminal (handle id) → OpenPLC address. Wiring an element to a terminal
+// gives that element the terminal's address (auto-bind).
+export const PLC_ADDR = {
+  i_start:'%IX0.0', i_stop1:'%IX0.1', i_stop2:'%IX0.2', i_emerg:'%IX0.3',
+  in0:'%IX0.4', in1:'%IX0.5', in2:'%IX0.6', in3:'%IX0.7', in4:'%IX1.0', in5:'%IX1.1',
+  in_a0_0:'%IX1.2', in_a0_1:'%IX1.3', in_a0_2:'%IX1.4', in_a0_3:'%IX1.5', in_a0_4:'%IX8.0', in_a0_5:'%IX8.1',
+  q0:'%QX0.0', q1:'%QX0.1', q2:'%QX0.2', q3:'%QX0.3', q4:'%QX0.4', q5:'%QX0.5', q6:'%QX0.6', q7:'%QX0.7',
+};
+
 // "Stub" point: leaves the terminal in the handle's direction.
 function stubPt(x, y, p, D=18){
   if (p === Position.Top)    return { x, y: y - D };

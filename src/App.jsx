@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
 import { ReactFlow, ReactFlowProvider, Background, Controls, useNodesState, useEdgesState, useReactFlow, addEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { nodeTypes, edgeTypes, clearEdgePaths, edgeDragRegistry } from './nodes.jsx';
+import { nodeTypes, edgeTypes, clearEdgePaths, edgeDragRegistry, PLC_ADDR } from './nodes.jsx';
 import * as E from './engine.js';
 import { makeNodes, makeEdges, paintNodes, paintEdges, savePos, LS_POS, loadIO, saveIO } from './graph.js';
 import { IconPlay, IconPause } from './icons.jsx';
@@ -176,7 +176,18 @@ function Flow({ embedded }){
   // ---- Connect two ports by dragging a wire between handles ----
   const onConnect = useCallback((params) => {
     setEdges(eds => addEdge({ ...params, type:'tag', data:{ kind:'wire', tagAt:'target' }, style:{ stroke:'#8b949e', strokeWidth:2 } }, eds));
-  }, [setEdges]);
+    // Auto-bind: wiring an element to a PLC terminal gives the element that terminal's OpenPLC address.
+    setNodes(nds => {
+      const byId = {}; nds.forEach(n => { byId[n.id] = n; });
+      const s = byId[params.source], t = byId[params.target];
+      let elemId = null, addr = null;
+      if (t?.type === 'plc' && PLC_ADDR[params.targetHandle]) { elemId = params.source; addr = PLC_ADDR[params.targetHandle]; }
+      else if (s?.type === 'plc' && PLC_ADDR[params.sourceHandle]) { elemId = params.target; addr = PLC_ADDR[params.sourceHandle]; }
+      if (!elemId || !addr) return nds;
+      const map = loadIO(); map[elemId] = addr; saveIO(map);
+      return nds.map(n => n.id === elemId ? { ...n, data: { ...n.data, io: addr } } : n);
+    });
+  }, [setEdges, setNodes]);
 
   const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
   const onDrop = (e) => {
