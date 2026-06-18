@@ -8,6 +8,14 @@ export const edgeDragRegistry = new Map();
 const GRN = '#2ec27e', AMB = '#e3b341', AIR = '#4aa3ff', MUT = '#8b949e', METAL = '#cdd9e5';
 const hStyle = (c) => ({ background: c, width: 8, height: 8, border: '1px solid #0b0e13' });
 
+// Small badge showing a node's bound OpenPLC address (%IX… input = blue · %QX… output = amber)
+function IoBadge({ addr }){
+  const inp = addr[1] === 'I';
+  return <div style={{ position:'absolute', top:-9, right:-8, zIndex:6, pointerEvents:'none',
+    background: inp ? '#2f7bf6' : '#e3b341', color: inp ? '#fff' : '#0b0e13',
+    font:'700 9px system-ui', padding:'1px 5px', borderRadius:5, border:'1px solid #0b0e13', whiteSpace:'nowrap' }}>{addr}</div>;
+}
+
 // ---------- Wire path persistence (localStorage) ----------
 const LS_EDGES = 'spiderlive-edges';
 export const saveEdgePaths = (edges) => {
@@ -191,6 +199,7 @@ export function PLCNode({ data }){
   const bx = k => 74 + k*34;
   return (
     <div title="SPI-DRY UTM-S9-MEC PLC · CPU 231043 AC/DC/RLY (14 DI / 10 relay DQ)" style={{ width:W, height:H, position:'relative' }}>
+      {data.io && <IoBadge addr={data.io} />}
       {di.map(([id,addr,c],k) => <Handle key={id} type="target" position={Position.Top} id={id} title={`${addr} · ${id}`} style={{ ...hStyle(sim.di&&sim.di[k] ? c : '#39414d'), left: dx(k), top: 13 }} />)}
       {bot.map((t,k) => t.id ? <Handle key={t.id} type="source" position={Position.Bottom} id={t.id} title={`Q0${t.lab} (relay)`} style={{ ...hStyle(sim.q&&sim.q[+t.id.slice(1)] ? GRN : '#2a4035'), left: bx(k), top: H-13 }} /> : null)}
       <Handle type="target" position={Position.Right} id="lplus" title="L+ 24 VDC" style={{ ...hStyle('#e5534b'), top: 50 }} />
@@ -246,6 +255,7 @@ export function PLCNode({ data }){
 export function ButtonNode({ data }){
   return (
     <div onClick={data.onClick} style={{ width:56, height:70, position:'relative', cursor:'pointer' }}>
+      {data.io && <IoBadge addr={data.io} />}
       <Handle type="source" position={Position.Bottom} id="out" style={hStyle(data.col)} />
       <svg width="56" height="70">
         <rect x="6" y="2" width="44" height="44" rx="7" fill="#0f1217" stroke="#000" />
@@ -261,6 +271,7 @@ export function ButtonNode({ data }){
 export function MushNode({ data }){
   return (
     <div onClick={data.onClick} style={{ width:60, height:74, position:'relative', cursor:'pointer' }}>
+      {data.io && <IoBadge addr={data.io} />}
       <Handle type="source" position={Position.Bottom} id="out" style={hStyle('#e5534b')} />
       <svg width="60" height="74">
         <rect x="6" y="2" width="48" height="48" rx="7" fill="#0f1217" />
@@ -285,6 +296,7 @@ export function ModuleNode({ data }){
   const tri = (cx2) => `M${cx2-5} ${vy+B+8} L${cx2+5} ${vy+B+8} L${cx2} ${vy+B+16} Z`;
   return (
     <div title={'Double-acting cylinder '+(i+1)+'A  +  5/2 solenoid valve '+(i+1)+'V1'} style={{ width:W, height:H, position:'relative' }}>
+      {data.io && <IoBadge addr={data.io} />}
       <Handle type="target" position={Position.Left}   id="sol" title="Pilot 14 — solenoid Y" style={{ ...hStyle(GRN), top: vy+B/2 }} />
       <Handle type="source" position={Position.Top}    id="a0"  title="Limit switch a0 — HOME (rod retracted)" style={{ ...hStyle('#d68b2a'), left: xa0 }} />
       <Handle type="source" position={Position.Top}    id="a1"  title="Limit switch a1 — END (rod extended)" style={{ ...hStyle(AMB), left: xa1 }} />

@@ -14,6 +14,11 @@ export const savePos = (nodes) => {
   try { localStorage.setItem(LS_POS, JSON.stringify(m)); } catch {}
 };
 
+// ---- I/O address binding per node (e.g. a button → %IX0.0, an output → %QX0.0) ----
+export const LS_IO = 'spiderlive-io';
+export const loadIO = () => { try { return JSON.parse(localStorage.getItem(LS_IO)) || {}; } catch { return {}; } };
+export const saveIO = (map) => { try { localStorage.setItem(LS_IO, JSON.stringify(map)); } catch {} };
+
 const arrEq = (a, b) => { if (!a || !b || a.length !== b.length) return false; for (let i=0;i<a.length;i++) if (a[i] !== b[i]) return false; return true; };
 
 // persist=false → canonical layout, ignore the user's saved positions (used by the preview).
@@ -34,9 +39,11 @@ export function makeNodes(sim, persist = true){
   for (let i=0;i<6;i++)
     n.push({ id:'m'+i, type:'module', position:{ x:MODX[i], y:300 }, data:{ i, pos:0, on:false } });
   n.push({ id:'sup', type:'supply', position:{ x:430, y:540 }, data:{} });
-  if (persist){                                                   // restore the user's saved layout
+  if (persist){                                                   // restore the user's saved layout + I/O bindings
     const saved = loadPos();
     n.forEach(nd => { if (saved[nd.id]) nd.position = saved[nd.id]; });
+    const io = loadIO();
+    n.forEach(nd => { if (io[nd.id]) nd.data = { ...nd.data, io: io[nd.id] }; });
   }
   return n;
 }

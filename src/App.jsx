@@ -3,7 +3,7 @@ import { ReactFlow, ReactFlowProvider, Background, Controls, useNodesState, useE
 import '@xyflow/react/dist/style.css';
 import { nodeTypes, edgeTypes, clearEdgePaths, edgeDragRegistry } from './nodes.jsx';
 import * as E from './engine.js';
-import { makeNodes, makeEdges, paintNodes, paintEdges, savePos, LS_POS } from './graph.js';
+import { makeNodes, makeEdges, paintNodes, paintEdges, savePos, LS_POS, loadIO, saveIO } from './graph.js';
 import { IconPlay, IconPause } from './icons.jsx';
 import spiderLiveLogo from './assets/spiderlive-logo.png';
 
@@ -31,6 +31,12 @@ const DOCS = {
 const btnCss = (bg, fg='#0b0e13') => ({ background:bg, color:fg, border:'none', borderRadius:9, padding:'10px 15px', fontWeight:600, fontSize:13, cursor:'pointer' });
 const chip = { background:'#161b22', border:'1px solid #2a313c', borderRadius:7, padding:'3px 8px', color:'#8b949e' };
 
+// OpenPLC addresses you can bind a component to (14 DI, 10 relay DO)
+const IN_ADDR = []; for (let b=0;b<2;b++) for (let i=0;i<8;i++) if (b===0 || i<6) IN_ADDR.push(`%IX${b}.${i}`);
+const OUT_ADDR = []; for (let b=0;b<2;b++) for (let i=0;i<8;i++) if (b===0 || i<2) OUT_ADDR.push(`%QX${b}.${i}`);
+const NODE_NAME = { plc:'PLC', module:'Cylinder', mush:'Emergency stop', supply:'Pneumatic supply', supply24:'24 VDC supply', tower:'Signal tower', button:'Push button' };
+const nodeLabel = (n) => !n ? '' : (n.data?.lab || NODE_NAME[n.type] || n.type);
+
 
 function Flow({ embedded }){
   const rf = useReactFlow();
@@ -47,6 +53,7 @@ function Flow({ embedded }){
   const hotRef = useRef(null);                                   // id of the highlighted wire (for the rAF loop)
   const hovT = useRef(0);
   const dropRef = useRef(0);
+  const [selNode, setSelNode] = useState(null);                  // node selected for I/O binding
 
   // Pushes the current state onto nodes/wires. animate=true → animated flow on wires. Only recreates what changed.
   const applyState = useCallback((animate) => {
@@ -181,6 +188,14 @@ function Flow({ embedded }){
     addNode(type, position, label);
   };
 
+  // ---- Bind the selected component to an OpenPLC address (%IX… / %QX…) ----
+  const setNodeIO = (addr) => {
+    if (!selNode) return;
+    setNodes(nds => nds.map(n => n.id === selNode.id ? { ...n, data: { ...n.data, io: addr || undefined } } : n));
+    const map = loadIO(); if (addr) map[selNode.id] = addr; else delete map[selNode.id]; saveIO(map);
+    setSelNode(s => s ? { ...s, data: { ...s.data, io: addr || undefined } } : s);
+  };
+
   useEffect(() => {                                              // SIMULATION: continuous animation loop
     if (!live) return;
     let raf, prev = performance.now();
@@ -209,6 +224,7 @@ function Flow({ embedded }){
       <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
         onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
         onNodeDragStop={() => setNodes(nds => { savePos(nds); return nds; })}
+        onNodeClick={(_, n) => setSelNode(n)} onPaneClick={() => setSelNode(null)}
         onNodeMouseEnter={(_, n) => setDocKey(n.type)} onNodeMouseLeave={() => setDocKey(null)}
         panOnDrag={[1]} selectionOnDrag={false} panOnScroll={false}
         fitView minZoom={0.3} proOptions={{ hideAttribution:true }}>
@@ -238,6 +254,30 @@ function Flow({ embedded }){
             style={{ ...btnCss('#cdd9e5'), padding:'8px 13px', display:'inline-flex', alignItems:'center', gap:7 }}>
             <IconPause size={14} /> Pause
           </button>
+        </div>
+      )}
+      {selNode && (
+        <div style={{ position:'absolute', top:12, right:12, width:236, zIndex:16, overflow:'hidden',
+                      background:'#0d1117f5', border:'1px solid #2a3445', borderRadius:12,
+                      boxShadow:'0 16px 40px #000a', font:'13px system-ui' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
+                        padding:'10px 12px', borderBottom:'1px solid #2a313c' }}>
+            <span style={{ fontWeight:700, color:'#e6edf3' }}>{nodeLabel(selNode)}</span>
+            <button onClick={() => setSelNode(null)} style={{ background:'none', border:'none', color:'#8b949e', cursor:'pointer', fontSize:17, lineHeight:1 }}>×</button>
+          </div>
+          <div style={{ padding:'12px 12px 14px' }}>
+            <div style={{ fontSize:11, color:'#8b949e', fontWeight:600, marginBottom:7, letterSpacing:0.3 }}>OpenPLC address</div>
+            <select value={selNode.data?.io || ''} onChange={e => setNodeIO(e.target.value)}
+              style={{ width:'100%', boxSizing:'border-box', padding:'8px 10px', fontSize:13,
+                       background:'#161b22', color:'#e6edf3', border:'1px solid #2a3445', borderRadius:8, cursor:'pointer' }}>
+              <option value="">— none —</option>
+              <optgroup label="Inputs (%IX)">{IN_ADDR.map(a => <option key={a} value={a}>{a}</option>)}</optgroup>
+              <optgroup label="Outputs (%QX)">{OUT_ADDR.map(a => <option key={a} value={a}>{a}</option>)}</optgroup>
+            </select>
+            <p style={{ fontSize:11.5, color:'#8b949e', lineHeight:1.45, margin:'10px 0 0' }}>
+              Bind this component to a PLC address. <b style={{ color:'#5b9bff' }}>%IX</b> = input (the element sends a signal to the PLC); <b style={{ color:'#e3b341' }}>%QX</b> = output (the PLC drives the element).
+            </p>
+          </div>
         </div>
       )}
       {!embedded && (
