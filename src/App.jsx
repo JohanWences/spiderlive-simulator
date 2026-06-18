@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
-import { ReactFlow, ReactFlowProvider, Background, Controls, useNodesState, useEdgesState, useReactFlow } from '@xyflow/react';
+import { ReactFlow, ReactFlowProvider, Background, Controls, useNodesState, useEdgesState, useReactFlow, addEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { nodeTypes, edgeTypes, clearEdgePaths, edgeDragRegistry } from './nodes.jsx';
 import * as E from './engine.js';
@@ -164,6 +164,11 @@ function Flow({ embedded }){
     const id = `n_${type}_${++dropRef.current}`;
     setNodes(nds => [...nds, { id, type, position, data: make(label) }]);
   };
+  // ---- Connect two ports by dragging a wire between handles ----
+  const onConnect = useCallback((params) => {
+    setEdges(eds => addEdge({ ...params, type:'tag', data:{ kind:'wire', tagAt:'target' }, style:{ stroke:'#8b949e', strokeWidth:2 } }, eds));
+  }, [setEdges]);
+
   const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
   const onDrop = (e) => {
     e.preventDefault();
@@ -200,7 +205,7 @@ function Flow({ embedded }){
          onPointerDown={onCanvasPointerDown} onPointerMove={onCanvasPointerMove} onDoubleClick={onCanvasDblClick}
          onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
         onNodeDragStop={() => setNodes(nds => { savePos(nds); return nds; })}
         onNodeMouseEnter={(_, n) => setDocKey(n.type)} onNodeMouseLeave={() => setDocKey(null)}
         panOnDrag={[1]} selectionOnDrag={false} panOnScroll={false}

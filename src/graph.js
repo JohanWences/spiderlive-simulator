@@ -105,7 +105,9 @@ export function paintNodes(s, nds){
 // animate=true → flow animation on active wires. hotId = id of a hover-highlighted wire (full app only).
 export function paintEdges(s, eds, animate = false, hotId = null){
   return eds.map(e => {
-    const k = e.data?.kind; let on = false, col = '#39414d';
+    const k = e.data?.kind;
+    if (k === 'wire') return e;                                  // user-drawn connections keep their own style
+    let on = false, col = '#39414d';
     if (k === 'out')    { on = E.solenoid(s, e.data.i); col = on ? '#39d98a' : '#234a37'; }
     else if (k==='sensor'){ on = E.upS(s.pos, e.data.i); col = on ? '#e3b341' : '#4a431f'; }
     else if (k==='sensor0'){ on = E.downS(s.pos, e.data.i); col = on ? '#d68b2a' : '#43361c'; }
