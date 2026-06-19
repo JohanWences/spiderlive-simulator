@@ -6,7 +6,7 @@ import NodePreview from './NodePreview.jsx';
 import BridgePanel from './BridgePanel.jsx';
 import IoMapping from './IoMapping.jsx';
 import { SYMBOLS } from '../symbols.jsx';
-import logo from '../assets/spiderlive-logo-blue.png';
+import logo from '../assets/spiderlive-icon.png';
 import { loadFiles, saveFiles, newFileId, dropProgramState } from '../files.js';
 import { startBridge } from '../bridge.js';
 import {
@@ -15,6 +15,7 @@ import {
 } from '../icons.jsx';
 
 const LIB_H_KEY = 'spiderlive-lib-h';
+const CONSOLE_KEY = 'spiderlive-console-open';
 
 // Component library, grouped into collapsible folders. Each item carries the node
 // type (for drag-and-drop) and metadata (for the info panel).
@@ -101,7 +102,7 @@ function MenuBar({ onTogglePanel, onToggleConsole }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 12px', height: 38, flexShrink: 0, userSelect: 'none',
                   background: '#0b1322', borderBottom: `1px solid ${T.border}`, position: 'relative', zIndex: 30 }}>
       <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 10px 0 2px', display: 'flex', alignItems: 'center' }}>
-        <img src={logo} alt="SpiderLive" style={{ height: 20 }} />
+        <img src={logo} alt="SpiderLive" style={{ height: 20, width: 'auto', display: 'block' }} />
       </button>
       {Object.keys(MENUS).map(name => (
         <div key={name} style={{ position: 'relative' }}>
@@ -296,7 +297,9 @@ function InfoPanel({ el, onClose }) {
 
 export default function Workspace() {
   const [panel, setPanel] = useState(true);
-  const [consoleOpen, setConsoleOpen] = useState(true);
+  const [consoleOpen, setConsoleOpen] = useState(() => {
+    try { return localStorage.getItem(CONSOLE_KEY) !== '0'; } catch { return true; }
+  });
   const [files, setFiles] = useState(loadFiles);
   const [openIds, setOpenIds] = useState([files[0]?.id || 'main']);
   const [active, setActive] = useState(files[0]?.id || 'main');   // a file id, or 'config'
@@ -312,6 +315,11 @@ export default function Workspace() {
     { t: 'ready', m: 'SpiderLive workspace loaded' },
     { t: 'info', m: 'PLC SPI-DRY UTM-S9-MEC · 22-step program ready' },
   ]);
+
+  // Console collapsed/expanded state survives reloads (covers both toggles: header + File menu).
+  useEffect(() => {
+    try { localStorage.setItem(CONSOLE_KEY, consoleOpen ? '1' : '0'); } catch {}
+  }, [consoleOpen]);
 
   // ---- File actions (persisted to localStorage via saveFiles) ----
   const fileOf = (id) => files.find(f => f.id === id);

@@ -67,6 +67,13 @@ const DOCS = [
           { t: 'p', x: 'Your node positions and custom wire paths are stored in your browser, so the circuit looks the same next time. Use Arrange to return to the default layout.' },
           { t: 'h2', x: 'Selection' },
           { t: 'p', x: 'Drag on empty canvas to select: left-to-right encloses (blue window), right-to-left crosses (green) — the same convention as CAD tools.' },
+          { t: 'h2', x: 'Grounding rule' },
+          { t: 'p', x: 'Wiring follows a simple convention based on which side of the PLC a component lives on:' },
+          { t: 'ul', x: [
+            'Inputs — any element wired to the PLC inputs (push buttons, the emergency button, reed/limit switches and other sensors) does NOT carry a ground connection.',
+            'Outputs — only elements driven by the PLC outputs (an indicator light, a solenoid/actuator, the signal tower, etc.) carry a node that must be connected to ground to energize and function.',
+          ] },
+          { t: 'note', x: 'In short: ground belongs on the output side. If a node lives on a PLC input it has no ground; if it lives on a PLC output it needs ground to turn on.' },
         ],
       },
     ],

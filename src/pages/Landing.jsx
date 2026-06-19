@@ -4,7 +4,7 @@ import { T } from '../theme.js';
 import SimPreview from './SimPreview.jsx';
 import SiteFooter from './SiteFooter.jsx';
 import { GitHubIcon, REPO_URL, IconPlay } from '../icons.jsx';
-import logo from '../assets/spiderlive-logo-blue.png';
+import logo from '../assets/spiderlive-logo-v2.png';
 
 const ghost = {
   background: T.panel2, color: T.text, border: `1px solid ${T.border2}`, borderRadius: 12,
@@ -26,7 +26,7 @@ export default function Landing() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '22px 40px', maxWidth: 1320, width: '100%', margin: '0 auto', boxSizing: 'border-box', zIndex: 2,
       }}>
-        <img src={logo} alt="SpiderLive" style={{ height: 46, width: 'auto' }} />
+        <img src={logo} alt="SpiderLive" style={{ height: 60, width: 'auto' }} />
         <div style={{ display: 'flex', gap: 22, alignItems: 'center' }}>
           <button onClick={() => navigate('/community')}
             style={{ background: 'transparent', color: T.muted, border: 'none', cursor: 'pointer', fontSize: 14.5, fontWeight: 600 }}>
@@ -64,7 +64,7 @@ export default function Landing() {
             fontSize: 13, fontWeight: 600, color: T.text,
             background: T.panel2, border: `1px solid ${T.border2}`, borderRadius: 999, padding: '7px 14px',
           }}>
-            <GitHubIcon size={15} /> Open source · MIT <span style={{ color: T.cyan }}>↗</span>
+            <GitHubIcon size={15} /> Open source · MIT
           </a>
           <h1 style={{ fontSize: 'clamp(34px, 4.6vw, 58px)', fontWeight: 800, lineHeight: 1.05, margin: '0 0 20px', letterSpacing: -1 }}>
             Build, wire and run<br />

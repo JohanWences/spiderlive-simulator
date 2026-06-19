@@ -11,11 +11,12 @@ const GRN = '#2ec27e', AMB = '#e3b341', AIR = '#4aa3ff', MUT = '#8b949e', METAL 
 const hStyle = (c) => ({ background: c, width: 8, height: 8, border: '1px solid #0b0e13' });
 
 // Small badge showing a node's bound OpenPLC address (%IX… input = blue · %QX… output = amber)
-function IoBadge({ addr }){
+function IoBadge({ addr, style }){
   const inp = addr[1] === 'I';
-  return <div style={{ position:'absolute', top:-9, right:-8, zIndex:6, pointerEvents:'none',
+  return <div style={{ position:'absolute', zIndex:6, pointerEvents:'none',
     background: inp ? '#2f7bf6' : '#e3b341', color: inp ? '#fff' : '#0b0e13',
-    font:'700 9px system-ui', padding:'1px 5px', borderRadius:5, border:'1px solid #0b0e13', whiteSpace:'nowrap' }}>{addr}</div>;
+    font:'700 9px system-ui', padding:'1px 5px', borderRadius:5, border:'1px solid #0b0e13', whiteSpace:'nowrap',
+    ...(style || { top:-9, right:-8 }) }}>{addr}</div>;
 }
 
 // ---------- Wire path persistence (localStorage, per active program) ----------
@@ -168,9 +169,11 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
   };
   const reset = () => setEdges(eds => { const r = eds.map(ed => ed.id === id ? { ...ed, data:{ ...ed.data, route:null } } : ed); saveEdgePaths(r); return r; });
 
-  // waypoint editing: show handles on hover, delete a waypoint → the wire straightens
+  // waypoint editing: show handles on hover, delete a waypoint → the wire straightens.
+  // Only while STOPPED (edit mode) — running locks the wiring (read-only).
   const [hover, setHover] = useState(false);
   const hoverT = useRef(0);
+  const running = useRunning();
   const enter = () => { clearTimeout(hoverT.current); setHover(true); };
   const leave = () => { clearTimeout(hoverT.current); hoverT.current = setTimeout(() => setHover(false), 130); };
   const removeWaypoint = (px, py) => setEdges(eds => {
@@ -210,10 +213,10 @@ export function TagEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition
       <BaseEdge id={id} path={path} style={drawStyle} markerEnd={markerEnd} />
       {/* invisible wide hit-area to grab and bend the wire (lives on the edge, not the pane → no clash with box-select) */}
       <path className="nodrag nopan" d={path} fill="none" stroke="transparent" strokeWidth={14}
-        style={{ cursor:'move', pointerEvents:'stroke' }}
-        onPointerEnter={enter} onPointerLeave={leave}
-        onPointerDown={(e) => { if (e.button === 0) beginDrag(e.clientX, e.clientY); }} />
-      {hover && (
+        style={{ cursor: running ? 'default' : 'move', pointerEvents:'stroke' }}
+        onPointerEnter={running ? undefined : enter} onPointerLeave={running ? undefined : leave}
+        onPointerDown={(e) => { if (!running && e.button === 0) beginDrag(e.clientX, e.clientY); }} />
+      {hover && !running && (
         <EdgeLabelRenderer>
           {/* segment midpoints → drag to create a bend (hollow) */}
           {full.slice(loI, hiI + 1).map((_, j) => {
@@ -390,8 +393,11 @@ export function ModuleNode({ data }){
   const tri = (cx2) => `M${cx2-5} ${vy+B+8} L${cx2+5} ${vy+B+8} L${cx2} ${vy+B+16} Z`;
   return (
     <div title={'Double-acting cylinder '+(i+1)+'A  +  5/2 solenoid valve '+(i+1)+'V1'} style={{ width:W, height:H, position:'relative' }}>
-      {data.io && <IoBadge addr={data.io} />}
-      <Handle type="target" position={Position.Left}   id="sol" title="Pilot 14 — solenoid Y" style={{ ...hStyle(GRN), top: vy+B/2 }} />
+      {data.ioMap?.sol && <IoBadge addr={data.ioMap.sol} style={{ left: 2, top: vy - 18 }} />}
+      {data.ioMap?.a0  && <IoBadge addr={data.ioMap.a0}  style={{ left: xa0 - 14, top: -11 }} />}
+      {data.ioMap?.a1  && <IoBadge addr={data.ioMap.a1}  style={{ left: xa1 - 14, top: -11 }} />}
+      <Handle type="target" position={Position.Left}   id="sol" title="Solenoid coil A1 (pilot 14) — signal from a PLC output Q" style={{ ...hStyle(GRN), top: vy+B/2 }} />
+      <Handle type="target" position={Position.Left}   id="com" title="Solenoid coil A2 — return to 0 V (M) of the 24 VDC supply" style={{ ...hStyle('#539bf5'), top: vy+B/2 + 13 }} />
       <Handle type="source" position={Position.Top}    id="a0"  title="Limit switch a0 — HOME (rod retracted)" style={{ ...hStyle('#d68b2a'), left: xa0 }} />
       <Handle type="source" position={Position.Top}    id="a1"  title="Limit switch a1 — END (rod extended)" style={{ ...hStyle(AMB), left: xa1 }} />
       <Handle type="target" position={Position.Bottom} id="air" title="Port 1 (P) — supply pressure" style={{ ...hStyle(AIR), left: vx+B }} />

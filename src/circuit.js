@@ -35,14 +35,19 @@ export function solveCircuit(nodes, edges, coilOn) {
   const onPos = (k) => pos.has(find(k));
   const onNeg = (k) => neg.has(find(k));
 
-  // 4) a lamp lights when its two terminals span + and − (either polarity)
+  // 4) a load lights when its two terminals span + and − (either polarity)
+  const spans = (a, b) => (onPos(a) && onNeg(b)) || (onNeg(a) && onPos(b));
   const res = {};
   nodes.forEach(n => {
-    if (n.type !== 'tower' || !n.data || !n.data._static) return;
-    const com = key(n.id, 'com');
-    const lit = {};
-    TOWER_LAMPS.forEach(h => { const a = key(n.id, h); lit[h] = (onPos(a) && onNeg(com)) || (onNeg(a) && onPos(com)); });
-    res[n.id] = lit;
+    if (!n.data || !n.data._static) return;
+    if (n.type === 'tower') {                                      // 3 lamps sharing the 'com' (0 V) terminal
+      const com = key(n.id, 'com');
+      const lit = {};
+      TOWER_LAMPS.forEach(h => { lit[h] = spans(key(n.id, h), com); });
+      res[n.id] = lit;
+    } else if (n.type === 'module') {                              // 5/2 valve coil across A1 (sol) ↔ A2 (com / 0 V)
+      res[n.id] = { on: spans(key(n.id, 'sol'), key(n.id, 'com')) };
+    }
   });
   return res;
 }

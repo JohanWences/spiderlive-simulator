@@ -3,7 +3,7 @@ import { navigate } from '../router.jsx';
 import { T } from '../theme.js';
 import { useAuth, signOut } from '../auth.jsx';
 import { IconPlus, IconFolder, IconGlobe, IconBook, IconLogout, IconArrowLeft, IconSearch } from '../icons.jsx';
-import logo from '../assets/spiderlive-logo-blue.png';
+import logo from '../assets/spiderlive-logo-v2.png';
 
 // ---- Seed projects (a real catalog would come from disk / a backend later) ----
 const PROJECTS = [
@@ -99,7 +99,7 @@ export default function Home() {
       }}>
         <button onClick={() => navigate('/')}
           style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px 22px', textAlign: 'left' }}>
-          <img src={logo} alt="SpiderLive" style={{ height: 26, width: 'auto', display: 'block' }} />
+          <img src={logo} alt="SpiderLive" style={{ height: 34, width: 'auto', display: 'block' }} />
         </button>
 
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.faint, textTransform: 'uppercase', padding: '0 8px 8px' }}>

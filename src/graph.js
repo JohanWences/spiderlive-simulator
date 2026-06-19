@@ -28,12 +28,19 @@ export const saveLabels = (map) => { try { localStorage.setItem(pkey(LS_LAB), JS
 // ---- Full canvas snapshot for blank (user-built) files: placed nodes + wires ----
 export const LS_CANVAS = 'spiderlive-canvas';
 export const loadCanvas = () => { try { return JSON.parse(localStorage.getItem(pkey(LS_CANVAS))) || null; } catch { return null; } };
+let lastCanvasKey = null, lastCanvasStr = null;
 export const saveCanvas = (nodes, edges) => {
   // JSON.stringify drops function-valued data (onClick/lit) — rebuilt from DROP_DATA on load.
-  const N = nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: n.data }));
+  // Strip volatile SIM state (pos/on/lamps): it's recomputed on load and animates ~60 fps, so
+  // persisting it would hit localStorage every frame during a cylinder stroke.
+  const strip = ({ pos, on, lamps, ...rest }) => rest;
+  const N = nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: strip(n.data || {}) }));
   // route = the wire's waypoints (the wiring "shape") — persisted so bends survive a reload.
   const Ed = edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, route: e.data?.route || null }));
-  try { localStorage.setItem(pkey(LS_CANVAS), JSON.stringify({ nodes: N, edges: Ed })); } catch {}
+  const key = pkey(LS_CANVAS), str = JSON.stringify({ nodes: N, edges: Ed });
+  if (key === lastCanvasKey && str === lastCanvasStr) return;     // dedup — skip identical writes (pos churn)
+  lastCanvasKey = key; lastCanvasStr = str;
+  try { localStorage.setItem(key, str); } catch {}
 };
 
 const arrEq = (a, b) => { if (!a || !b || a.length !== b.length) return false; for (let i=0;i<a.length;i++) if (a[i] !== b[i]) return false; return true; };

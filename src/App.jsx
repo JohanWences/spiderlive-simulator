@@ -6,7 +6,7 @@ import * as E from './engine.js';
 import { makeNodes, makeEdges, paintNodes, paintEdges, savePos, LS_POS, loadIO, saveIO, loadCanvas, saveCanvas, loadLabels, saveLabels } from './graph.js';
 import { IconPlay, IconPause } from './icons.jsx';
 import { useBridge } from './bridge-client.js';
-import { useActiveOutputs, setRunning, clearActiveInputs } from './inputs.js';
+import { useActiveOutputs, setRunning, clearActiveInputs, setInput } from './inputs.js';
 import { solveCircuit } from './circuit.js';
 import { setProgram } from './files.js';
 import spiderLiveLogo from './assets/spiderlive-logo.png';
@@ -84,6 +84,46 @@ function Flow({ embedded, fileId = 'main', blank = false }){
   const _selected = nodes.filter(n => n.selected);               // properties panel = single selection (derived, never lags)
   const selNode = _selected.length === 1 ? _selected[0] : null;
 
+  // ---- Undo / redo (Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y) — restores deleted/added/moved elements ----
+  const nodesRef = useRef(nodes); nodesRef.current = nodes;       // always-current refs for snapshots
+  const edgesRef = useRef(edges); edgesRef.current = edges;
+  const past = useRef([]);                                        // { nodes, edges } states BEFORE each edit
+  const future = useRef([]);                                      // states undone, available to redo
+  const snapLock = useRef(false);                                 // collapse one action's many changes into ONE snapshot
+  const takeSnapshot = useCallback(() => {
+    if (snapLock.current) return;
+    snapLock.current = true;
+    past.current.push({ nodes: nodesRef.current, edges: edgesRef.current });
+    if (past.current.length > 120) past.current.shift();
+    future.current = [];                                          // a fresh edit invalidates redo
+    setTimeout(() => { snapLock.current = false; }, 0);
+  }, []);
+  const undo = useCallback(() => {
+    const prev = past.current.pop(); if (!prev) return;
+    future.current.push({ nodes: nodesRef.current, edges: edgesRef.current });
+    setNodes(prev.nodes); setEdges(prev.edges);
+  }, [setNodes, setEdges]);
+  const redo = useCallback(() => {
+    const next = future.current.pop(); if (!next) return;
+    past.current.push({ nodes: nodesRef.current, edges: edgesRef.current });
+    setNodes(next.nodes); setEdges(next.edges);
+  }, [setNodes, setEdges]);
+  // snapshot just before a delete (its change carries type:'remove'); add/move are captured at their source
+  const onNodesChangeU = useCallback((c) => { if (c.some(x => x.type === 'remove')) takeSnapshot(); onNodesChange(c); }, [onNodesChange, takeSnapshot]);
+  const onEdgesChangeU = useCallback((c) => { if (c.some(x => x.type === 'remove')) takeSnapshot(); onEdgesChange(c); }, [onEdgesChange, takeSnapshot]);
+  useEffect(() => {
+    if (embedded) return;                                         // only the full editor owns Ctrl+Z
+    const onKey = (e) => {
+      if (e.target.closest && e.target.closest('input, textarea')) return;   // don't hijack text-field undo
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+      else if (k === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [embedded, undo, redo]);
+
   // Pushes the current state onto nodes/wires. animate=true → animated flow on wires. Only recreates what changed.
   const applyState = useCallback((animate) => {
     setNodes(nds => paintNodes(sim.current, nds));
@@ -112,6 +152,7 @@ function Flow({ embedded, fileId = 'main', blank = false }){
     return { id:bestId, dist:Math.sqrt(bd), vert };
   };
   const onCanvasDblClick = (e) => {
+    if (live) return;                                            // wiring is read-only while running
     if (e.target.closest && e.target.closest('.react-flow__node, .react-flow__handle, button, a')) return;
     const hit = closestEdgeAt(e.clientX, e.clientY), zoom = rf.getZoom ? rf.getZoom() : 1;
     if (hit.id && hit.dist <= 12 / zoom){ const api = edgeDragRegistry.get(hit.id); if (api) api.reset(); }
@@ -189,6 +230,7 @@ function Flow({ embedded, fileId = 'main', blank = false }){
   // ---- Drag-and-drop: place a component dragged from the Library ----
   const addNode = (type, position, label) => {
     const make = DROP_DATA[type]; if (!make) return;
+    takeSnapshot();                                                // so Ctrl+Z removes the just-dropped node
     // _static → this is a placed component with its OWN state; the engine never repaints it,
     // so two dropped PLCs don't share the simulated circuit's state.
     setNodes(nds => {
@@ -201,8 +243,9 @@ function Flow({ embedded, fileId = 'main', blank = false }){
   // The address binding is derived from the wiring (see the I/O BINDING effect), so this
   // just records the connection — the wire that reaches a PLC terminal defines the address.
   const onConnect = useCallback((params) => {
+    takeSnapshot();                                                // so Ctrl+Z removes the new wire
     setEdges(eds => addEdge({ ...params, type:'tag', data:{ kind:'wire', tagAt:'target' }, style:{ stroke:'#8b949e', strokeWidth:2 } }, eds));
-  }, [setEdges]);
+  }, [setEdges, takeSnapshot]);
 
   const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
   const onDrop = (e) => {
@@ -253,18 +296,28 @@ function Flow({ embedded, fileId = 'main', blank = false }){
     saveCanvas(nodes, edges);
   }, [blank, nodes, edges]);
 
-  // CONTINUITY: light user-placed lamps from the actual circuit (loop closed across + and −).
+  // CONTINUITY: light user-placed loads (tower lamps + 5/2 valve coils) from the ACTUAL
+  // circuit — energized only when the wiring closes a loop across + and − (real 0 V return).
   useEffect(() => {
     setNodes(nds => {
       let solved; try { solved = solveCircuit(nds, edges, addr => !!activeOut[addr]); } catch { return nds; }
       let changed = false;
       const out = nds.map(n => {
-        if (n.type !== 'tower' || !n.data?._static) return n;
-        const lamps = solved[n.id]; if (!lamps) return n;
-        const p = n.data.lamps;
-        if (p && p.in_emg === lamps.in_emg && p.in_amber === lamps.in_amber && p.in_run === lamps.in_run) return n;
-        changed = true;
-        return { ...n, data: { ...n.data, lamps } };
+        if (!n.data?._static) return n;
+        if (n.type === 'tower') {
+          const lamps = solved[n.id]; if (!lamps) return n;
+          const p = n.data.lamps;
+          if (p && p.in_emg === lamps.in_emg && p.in_amber === lamps.in_amber && p.in_run === lamps.in_run) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, lamps } };
+        }
+        if (n.type === 'module') {                                 // coil energized → spool shifts (data.on)
+          const on = !!solved[n.id]?.on;
+          if (!!n.data.on === on) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, on } };
+        }
+        return n;
       });
       return changed ? out : nds;
     });
@@ -276,16 +329,27 @@ function Flow({ embedded, fileId = 'main', blank = false }){
   useEffect(() => {
     setNodes(nds => {
       const isPlc = new Set(nds.filter(n => n.type === 'plc').map(n => n.id));
+      // device node → { handleId: '%IX…' | '%QX…' } — EACH terminal binds independently. A module
+      // is NOT one address: its solenoid is an output (Q) and its a0/a1 sensors are inputs (I).
       const ioOf = {};
+      const put = (node, handle, addr) => { (ioOf[node] || (ioOf[node] = {}))[handle || '_'] = addr; };
       edges.forEach(e => {
-        if (isPlc.has(e.target) && PLC_ADDR[e.targetHandle]) ioOf[e.source] = PLC_ADDR[e.targetHandle];
-        else if (isPlc.has(e.source) && PLC_ADDR[e.sourceHandle]) ioOf[e.target] = PLC_ADDR[e.sourceHandle];
+        if (isPlc.has(e.target) && PLC_ADDR[e.targetHandle]) put(e.source, e.sourceHandle, PLC_ADDR[e.targetHandle]);
+        else if (isPlc.has(e.source) && PLC_ADDR[e.sourceHandle]) put(e.target, e.targetHandle, PLC_ADDR[e.sourceHandle]);
       });
       let changed = false;
       const out = nds.map(n => {
         // only user-placed elements; PLC = source of addresses · tower = multi-terminal
         if (n.type === 'plc' || n.type === 'tower' || !n.data?._static) return n;
-        const addr = ioOf[n.id];
+        const hmap = ioOf[n.id] || {};
+        if (n.type === 'module') {                                  // multi-terminal: keep a per-handle map
+          const prev = n.data.ioMap || {};
+          const pk = Object.keys(prev), hk = Object.keys(hmap);
+          if (pk.length === hk.length && pk.every(k => prev[k] === hmap[k])) return n;
+          changed = true;
+          return { ...n, data: { ...n.data, ioMap: hmap } };
+        }
+        const addr = hmap[Object.keys(hmap)[0]];                    // single-terminal devices (button, e-stop)
         if ((n.data?.io || undefined) === (addr || undefined)) return n;
         changed = true;
         return { ...n, data: { ...n.data, io: addr || undefined } };
@@ -294,19 +358,66 @@ function Flow({ embedded, fileId = 'main', blank = false }){
     });
   }, [edges, setNodes]);
 
+  // CYLINDER KINEMATICS: a placed cylinder has no engine tick, so we animate its rod here. ONE
+  // loop runs while the sim is live; each frame it nudges every rod toward its solenoid target
+  // (data.on, set by the continuity solver) — extend (pos→1) while energized, spring-return (pos→0)
+  // when it drops (~1.1 s stroke). Reading the target fresh each frame (instead of restarting the
+  // loop on every on-change) keeps it smooth even if the PLC pulses the coil — no stutter.
+  useEffect(() => {
+    if (!live) return;
+    let raf = 0, last = 0;
+    const STROKE_MS = 1100;
+    const tick = (t) => {
+      raf = requestAnimationFrame(tick);
+      if (!last) { last = t; return; }
+      const dt = Math.min(80, t - last); last = t;
+      setNodes(nds => {
+        let changed = false;
+        const out = nds.map(n => {
+          if (n.type !== 'module' || !n.data?._static) return n;
+          const target = n.data.on ? 1 : 0, cur = n.data.pos ?? 0;
+          if (cur === target) return n;
+          const step = dt / STROKE_MS;
+          let pos = cur < target ? Math.min(target, cur + step) : Math.max(target, cur - step);
+          if (Math.abs(pos - target) < 1e-3) pos = target;
+          changed = true;
+          return { ...n, data: { ...n.data, pos } };
+        });
+        return changed ? out : nds;
+      });
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [live, setNodes]);
+
+  // LIMIT SWITCHES → PLC: a0/a1 are contacts that close at the ends of travel. Closing only raises
+  // a SIGNAL — it reaches the PLC ONLY through a wire, and goes to whichever input that wire reaches
+  // (ioMap, derived from the wiring). An unwired sensor sends nothing. Active only while running.
+  useEffect(() => {
+    if (!live) return;
+    nodes.forEach(n => {
+      if (n.type !== 'module' || !n.data?._static) return;
+      const pos = n.data.pos ?? 0, map = n.data.ioMap || {};
+      if (map.a0) setInput(map.a0, pos <= 0.001);   // home — contact closed when fully retracted
+      if (map.a1) setInput(map.a1, pos >= 0.999);   // end  — contact closed when fully extended
+    });
+  }, [nodes, live]);
+
   return (
     <div style={{ width: embedded ? '100%' : '100vw', height: embedded ? '100%' : '100vh', background:'#0b0e13', position:'relative' }}
          onPointerDown={onCanvasPointerDown} onDoubleClick={onCanvasDblClick}
          onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
+        onNodesChange={onNodesChangeU} onEdgesChange={onEdgesChangeU} onConnect={onConnect}
+        onNodeDragStart={() => takeSnapshot()}
         onNodeDragStop={() => setNodes(nds => { savePos(nds); return nds; })}
         onNodeClick={(e, n) => setNodes(nds => nds.map(x => {            // our overlay reads this immediately
           const sel = e.shiftKey ? (x.id === n.id ? !x.selected : !!x.selected) : (x.id === n.id);
           return !!x.selected === !!sel ? x : { ...x, selected: sel };
         }))}
         onNodeMouseEnter={(_, n) => setDocKey(n.type)} onNodeMouseLeave={() => setDocKey(null)}
-        connectionMode={ConnectionMode.Loose} deleteKeyCode={['Delete', 'Backspace']}
+        nodesDraggable={!live} nodesConnectable={!live} edgesFocusable={!live}
+        connectionMode={ConnectionMode.Loose} deleteKeyCode={live ? null : ['Delete', 'Backspace']}
         selectionKeyCode={null} panOnDrag={[1, 2]} panOnScroll={false}
         fitView minZoom={0.3} proOptions={{ hideAttribution:true }}>
         <Background color="#1b222c" gap={22} />
@@ -324,7 +435,7 @@ function Flow({ embedded, fileId = 'main', blank = false }){
           })}
         </ViewportPortal>
       </ReactFlow>
-      <style>{`.react-flow__node.selected{box-shadow:none!important;outline:none!important;}`}</style>
+      <style>{`.react-flow__node.selected{box-shadow:none!important;outline:none!important;}@keyframes slpulse{0%,100%{opacity:1}50%{opacity:.35}}`}</style>
       {sel && (() => {
         const cr = sel.x1 < sel.x0;                               // crossing (green, touches) vs window (blue, encloses)
         const L = Math.min(sel.x0,sel.x1), T = Math.min(sel.y0,sel.y1);
@@ -332,32 +443,63 @@ function Flow({ embedded, fileId = 'main', blank = false }){
         return <div style={{ position:'fixed', left:L, top:T, width:W, height:H, zIndex:20, pointerEvents:'none',
           border:'1.5px '+(cr?'dashed #2ec27e':'solid #4aa3ff'), background:(cr?'#2ec27e22':'#4aa3ff1f') }} />;
       })()}
-      {embedded && (
-        <div style={{ position:'absolute', top:10, left:10, zIndex:10, display:'flex', alignItems:'center', gap:6,
-                      background:'#0d1117ee', border:'1px solid #2a313c', borderRadius:10, padding:'6px 8px', flexWrap:'wrap' }}>
-          <span style={{ ...chip, font:'600 11px system-ui', display:'inline-flex', alignItems:'center', gap:6 }}>
-            <span style={{ width:7, height:7, borderRadius:99, display:'inline-block',
-              background: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#8b949e' }} />
-            <b style={{ color: hud.status==='EMERGENCY'?'#e5534b':hud.status==='RUNNING'?'#2ec27e':'#e6edf3' }}>{hud.status}</b>
-          </span>
-          <span style={{ ...chip, font:'600 11px system-ui', display:'inline-flex', alignItems:'center', gap:6 }} title={bridge ? 'Connected to the local bridge → OpenPLC' : 'Bridge offline (run: npx spiderlive-bridge)'}>
-            <span style={{ width:7, height:7, borderRadius:99, display:'inline-block', background: bridge ? '#2ec27e' : '#5b6675' }} />
-            <b style={{ color: bridge ? '#2ec27e' : '#8b949e' }}>OpenPLC</b>
-          </span>
-          <button title="Start" onClick={() => { setLive(true); E.start(sim.current); }}
-            style={{ ...btnCss('#2ec27e'), padding:'8px 13px', display:'inline-flex', alignItems:'center', gap:7 }}>
-            <IconPlay size={14} /> Start
-          </button>
-          <button title="Pause — full stop, nothing is simulated" onClick={() => { setLive(false); E.stop(sim.current); }}
-            style={{ ...btnCss('#cdd9e5'), padding:'8px 13px', display:'inline-flex', alignItems:'center', gap:7 }}>
-            <IconPause size={14} /> Pause
-          </button>
+      {embedded && (() => {
+        const emerg = hud.status === 'EMERGENCY';
+        const sc = emerg ? '#ff5247' : live ? '#2ec27e' : '#8b949e';
+        return (
+        <div style={{ position:'absolute', top:10, left:10, zIndex:10, display:'flex', flexDirection:'column', gap:7,
+                      background:'#0d1117f5', border:'1px solid #2a313c', borderRadius:12, padding:'9px 11px' }}>
+          {/* row 1 — state pill right next to the controls */}
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'6px 11px', borderRadius:8,
+                           fontWeight:700, fontSize:11.5, letterSpacing:0.5, color:sc,
+                           background: emerg ? '#2a1614' : live ? '#0f2a1a' : '#161b22',
+                           border:'1px solid ' + (emerg ? '#6e2a2a' : live ? '#1f6f43' : '#2a313c') }}>
+              <span style={{ width:8, height:8, borderRadius:99, background:sc,
+                             boxShadow: live && !emerg ? '0 0 7px '+sc : 'none',
+                             animation: live && !emerg ? 'slpulse 1.1s ease-in-out infinite' : 'none' }} />
+              {emerg ? 'EMERGENCY' : live ? 'RUNNING' : 'STOPPED'}
+            </span>
+            <button onClick={() => { if (!live) { setLive(true); E.start(sim.current); } }} title={live ? 'Simulation running' : 'Start the simulation'}
+              style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', borderRadius:9, fontWeight:700, fontSize:13,
+                       cursor: live ? 'default' : 'pointer', border:'1px solid #2ec27e',
+                       background: live ? '#2ec27e' : 'transparent', color: live ? '#0b0e13' : '#2ec27e',
+                       boxShadow: live ? '0 0 12px rgba(46,194,126,0.55)' : 'none' }}>
+              <IconPlay size={14} /> {live ? 'Running' : 'Start'}
+            </button>
+            <button onClick={() => { if (live) { setLive(false); E.stop(sim.current); } }} title={live ? 'Pause — full stop · back to edit mode' : 'Stopped — edit mode'}
+              style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', borderRadius:9, fontWeight:700, fontSize:13,
+                       cursor: live ? 'pointer' : 'default', border:'1px solid ' + (!live ? '#5b6675' : '#2a313c'),
+                       background: !live ? '#3a414c' : 'transparent', color: !live ? '#e6edf3' : '#8b949e' }}>
+              <IconPause size={14} /> {live ? 'Pause' : 'Stopped'}
+            </button>
+          </div>
+          {/* row 2 — connection + edit mode (secondary info) */}
+          <div style={{ display:'flex', alignItems:'center', gap:14, paddingLeft:2, borderTop:'1px solid #1c222c', paddingTop:7 }}>
+            <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color: bridge ? '#2ec27e' : '#8b949e' }}
+                  title={bridge ? 'Connected to the local bridge → OpenPLC' : 'Bridge offline (run: npx spiderlive-bridge)'}>
+              <span style={{ width:7, height:7, borderRadius:99, background: bridge ? '#2ec27e' : '#5b6675' }} />
+              OpenPLC · {bridge ? 'conectado' : 'offline'}
+            </span>
+            <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color: live ? '#e3b341' : '#5b9bff' }}
+                  title={live ? 'Read-only while running — stop to edit' : 'Edit mode — drag, wire and edit freely'}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {live ? <><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></>
+                      : <><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></>}
+              </svg>
+              {live ? 'Modo ejecución' : 'Modo edición'}
+            </span>
+          </div>
         </div>
-      )}
+        );
+      })()}
       {selNode && (() => {
-        const live = nodes.find(n => n.id === selNode.id) || selNode;   // live address (follows the wiring)
-        const addr = live.data?.io;
-        const isIn = addr && addr[1] === 'I';
+        const live = nodes.find(n => n.id === selNode.id) || selNode;   // live addresses (follow the wiring)
+        const TERMS = { sol:'Solenoid Y (coil)', a0:'Sensor a0 — home', a1:'Sensor a1 — end' };
+        const map = live.data?.ioMap;                                   // module = per-terminal map · others = single io
+        const rows = map
+          ? Object.keys(TERMS).filter(h => map[h]).map(h => ({ term: TERMS[h], addr: map[h] }))
+          : (live.data?.io ? [{ term: null, addr: live.data.io }] : []);
         return (
         <div style={{ position:'absolute', top:12, right:12, width:236, zIndex:16, overflow:'hidden',
                       background:'#0d1117f5', border:'1px solid #2a3445', borderRadius:12,
@@ -373,15 +515,23 @@ function Flow({ embedded, fileId = 'main', blank = false }){
               placeholder={NODE_NAME[selNode.type] || selNode.type} maxLength={24}
               style={{ width:'100%', boxSizing:'border-box', padding:'8px 10px', fontSize:13, marginBottom:14,
                        background:'#161b22', color:'#e6edf3', border:'1px solid #2a3445', borderRadius:8, outline:'none' }} />
-            <div style={{ fontSize:11, color:'#8b949e', fontWeight:600, marginBottom:7, letterSpacing:0.3 }}>OpenPLC address</div>
-            {addr ? (
-              <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8,
+            <div style={{ fontSize:11, color:'#8b949e', fontWeight:600, marginBottom:7, letterSpacing:0.3 }}>
+              OpenPLC {rows.length > 1 ? 'addresses' : 'address'}
+            </div>
+            {rows.length ? rows.map(r => {
+              const isIn = r.addr[1] === 'I';
+              return (
+              <div key={(r.term || '') + r.addr} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderRadius:8, marginBottom:7,
                             background:'#161b22', border:`1px solid ${isIn ? '#2f5fa6' : '#6e5a1e'}` }}>
-                <span style={{ width:8, height:8, borderRadius:99, background: isIn ? '#2f7bf6' : '#e3b341' }} />
-                <b style={{ color:'#e6edf3', font:'700 13px ui-monospace, Menlo, monospace' }}>{addr}</b>
-                <span style={{ marginLeft:'auto', fontSize:11, color:'#8b949e' }}>{isIn ? 'input' : 'output'}</span>
+                <span style={{ width:8, height:8, borderRadius:99, flexShrink:0, background: isIn ? '#2f7bf6' : '#e3b341' }} />
+                <div style={{ minWidth:0 }}>
+                  {r.term && <div style={{ fontSize:10, color:'#8b949e', lineHeight:1.2 }}>{r.term}</div>}
+                  <b style={{ color:'#e6edf3', font:'700 13px ui-monospace, Menlo, monospace' }}>{r.addr}</b>
+                </div>
+                <span style={{ marginLeft:'auto', fontSize:11, color:'#8b949e', flexShrink:0 }}>{isIn ? 'input' : 'output'}</span>
               </div>
-            ) : (
+              );
+            }) : (
               <div style={{ padding:'8px 10px', borderRadius:8, background:'#161b22', border:'1px dashed #2a3445', color:'#8b949e', fontSize:12 }}>
                 Not wired to the PLC
               </div>
