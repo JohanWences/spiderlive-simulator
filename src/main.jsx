@@ -10,11 +10,13 @@ import Terms from './pages/Terms.jsx';
 import Privacy from './pages/Privacy.jsx';
 import Cookies from './pages/Cookies.jsx';
 import Community from './pages/Community.jsx';
+import SharedOpener from './pages/SharedOpener.jsx';
 import { useRoute } from './router.jsx';
 import { AuthProvider } from './auth.jsx';
 
 function Root() {
   const route = useRoute();
+  if (route.startsWith('/p/')) return <SharedOpener id={route.slice(3)} />;   // shared circuit link
   if (route === '/simulator') return <Workspace />;
   if (route === '/home') return <Home />;
   if (route === '/community') return <Community />;

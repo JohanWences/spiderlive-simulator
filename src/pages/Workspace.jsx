@@ -7,8 +7,10 @@ import BridgePanel from './BridgePanel.jsx';
 import IoMapping from './IoMapping.jsx';
 import { SYMBOLS } from '../symbols.jsx';
 import logo from '../assets/spiderlive-icon.png';
-import { loadFiles, saveFiles, newFileId, dropProgramState } from '../files.js';
+import { loadFiles, saveFiles, newFileId, dropProgramState, takePendingOpen } from '../files.js';
 import { startBridge } from '../bridge.js';
+import { useAuth } from '../auth.jsx';
+import { shareFile, shareLink } from '../share.js';
 import {
   IconSearch, IconPanel, IconComponents, IconCpu, IconPlay, IconFolder, IconFile,
   IconSettings, IconLink, IconChevron, IconPlus, IconX,
@@ -295,6 +297,49 @@ function InfoPanel({ el, onClose }) {
   );
 }
 
+// ---- Share popover (anchored under the Share button) ----
+const popBtn = { background: T.blue, color: '#fff', border: 'none', borderRadius: 7, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' };
+function Pop({ children, onClose }) {
+  return (
+    <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 40, width: 300,
+                  background: T.panel, border: `1px solid ${T.border2}`, borderRadius: 12, padding: '13px 14px',
+                  boxShadow: '0 16px 40px #000a', font: '13px system-ui', color: T.text }}>
+      <button onClick={onClose} style={{ position: 'absolute', top: 7, right: 10, background: 'none', border: 'none', color: T.faint, cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+      {children}
+    </div>
+  );
+}
+function SharePopover({ share, onClose }) {
+  const [copied, setCopied] = useState(false);
+  if (share.needAuth) return (
+    <Pop onClose={onClose}>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>Inicia sesión para compartir</div>
+      <div style={{ color: T.muted, fontSize: 12, marginBottom: 12 }}>Necesitas una cuenta para generar el link.</div>
+      <button onClick={() => navigate('/signin')} style={popBtn}>Iniciar sesión</button>
+    </Pop>
+  );
+  if (share.error) return (
+    <Pop onClose={onClose}>
+      <div style={{ fontWeight: 700, color: '#e5534b', marginBottom: 6 }}>No se pudo crear el link</div>
+      <div style={{ color: T.muted, fontSize: 12 }}>{share.error}</div>
+    </Pop>
+  );
+  const copy = () => { try { navigator.clipboard.writeText(share.link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {} };
+  return (
+    <Pop onClose={onClose}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>Link para compartir</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input readOnly value={share.link} onFocus={e => e.target.select()}
+          style={{ flex: 1, minWidth: 0, background: T.bg, color: T.text, border: `1px solid ${T.border}`, borderRadius: 7, padding: '7px 9px', fontSize: 12 }} />
+        <button onClick={copy} style={popBtn}>{copied ? '¡Copiado!' : 'Copiar'}</button>
+      </div>
+      <div style={{ color: T.muted, fontSize: 11.5, marginTop: 9, lineHeight: 1.4 }}>
+        Cualquiera con el link abre una <b style={{ color: T.text }}>copia editable</b> de este circuito.
+      </div>
+    </Pop>
+  );
+}
+
 export default function Workspace() {
   const [panel, setPanel] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(() => {
@@ -315,6 +360,8 @@ export default function Workspace() {
     { t: 'ready', m: 'SpiderLive workspace loaded' },
     { t: 'info', m: 'PLC SPI-DRY UTM-S9-MEC · 22-step program ready' },
   ]);
+  const { user } = useAuth();                                     // sharing needs a signed-in user
+  const [share, setShare] = useState(null);                      // null · 'sharing' · {link} · {error} · {needAuth}
 
   // Console collapsed/expanded state survives reloads (covers both toggles: header + File menu).
   useEffect(() => {
@@ -327,6 +374,24 @@ export default function Workspace() {
   const commitFiles = (next) => { setFiles(next); saveFiles(next); };
 
   const openFile = (id) => { setOpenIds(o => (o.includes(id) ? o : [...o, id])); setActive(id); };
+
+  // A shared link imported a circuit → open that file once the editor mounts.
+  useEffect(() => { const id = takePendingOpen(); if (id) openFile(id); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- Share the active file as a short link (Supabase-backed, copy on open) ----
+  const onShare = async () => {
+    if (!activeFile || active === 'bridge' || active === 'iomap') return;
+    if (!user) { setShare({ needAuth: true }); return; }
+    setShare('sharing');
+    try {
+      const id = await shareFile(activeFile);
+      const link = shareLink(id);
+      setShare({ link });
+      try { await navigator.clipboard.writeText(link); } catch {}
+    } catch (e) {
+      setShare({ error: (e && e.message) || 'No se pudo crear el link' });
+    }
+  };
 
   const newFile = () => {
     const id = newFileId();
@@ -485,6 +550,21 @@ export default function Workspace() {
               <span>SpiderLive Project</span><span style={{ color: T.faint }}>›</span>
               <span>{active === 'bridge' || active === 'iomap' ? 'Device' : 'Simulations'}</span><span style={{ color: T.faint }}>›</span>
               <span style={{ color: T.text }}>{active === 'bridge' ? 'OpenPLC Bridge' : active === 'iomap' ? 'I/O Mapping' : (activeFile?.name || 'untitled')}</span>
+              {active !== 'bridge' && active !== 'iomap' && (
+                <div style={{ marginLeft: 'auto', position: 'relative' }}>
+                  <button onClick={onShare} disabled={share === 'sharing'} title="Compartir este circuito con un link"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.panel2, color: T.text,
+                             border: `1px solid ${T.border2}`, borderRadius: 8, padding: '5px 12px', fontSize: 12.5, fontWeight: 600,
+                             cursor: share === 'sharing' ? 'default' : 'pointer' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                      <line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>
+                    </svg>
+                    {share === 'sharing' ? 'Compartiendo…' : 'Share'}
+                  </button>
+                  {share && typeof share === 'object' && <SharePopover share={share} onClose={() => setShare(null)} />}
+                </div>
+              )}
             </div>
           </div>
 
